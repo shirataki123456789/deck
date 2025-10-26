@@ -1,0 +1,6 @@
+streamlit
+pandas
+Pillow
+qrcode
+requests
+pyzbar
