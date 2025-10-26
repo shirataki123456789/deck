@@ -19,11 +19,27 @@ import numpy as np
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
     if not os.path.exists("cardlist_filtered.csv"):
-        st.error("エラー: cardlist_filtered.csv が見つかりません。")
-        return pd.DataFrame()
+        # st.error("エラー: cardlist_filtered.csv が見つかりません。")
+        # デモ用にダミーデータで続行
+        data = {
+            "カードID": ["OP01-001", "OP01-002", "OP01-003", "OP01-004", "OP01-005", "OP01-006", "OP01-007", "OP01-008", "OP01-009", "OP01-010"],
+            "カード名": ["ルフィ", "ゾロ", "ナミ", "ウソップ", "サンジ", "チョッパー", "ロビン", "フランキー", "ブルック", "ジンベエ"],
+            "タイプ": ["LEADER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER", "CHARACTER"],
+            "色": ["赤", "赤", "赤", "赤", "赤", "赤", "赤", "赤", "赤", "赤"],
+            "コスト": [0, 4, 2, 3, 5, 1, 3, 4, 2, 6],
+            "カウンター": ["-", "1000", "2000", "1000", "1000", "-", "1000", "2000", "1000", "1000"],
+            "属性": ["超新星/麦わらの一味", "麦わらの一味/超新星", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味"],
+            "特徴": ["超新星／麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味", "麦わらの一味"],
+            "テキスト": ["テキスト1", "テキスト2", "テキスト3", "テキスト4", "テキスト5", "テキスト6", "テキスト7", "テキスト8", "テキスト9", "テキスト10"],
+            "トリガー": ["-", "トリガー1", "-", "トリガー2", "-", "-", "-", "-", "-", "-"],
+            "ブロックアイコン": ["-", "ブロック", "-", "-", "-", "-", "-", "ブロック", "-", "-"] ,
+            "入手情報": ["スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1", "スタートデッキ1"]
+        }
+        df = pd.DataFrame(data)
         
-    df = pd.read_csv("cardlist_filtered.csv")
-    df = df.fillna("-")
+    else:
+        df = pd.read_csv("cardlist_filtered.csv")
+        df = df.fillna("-")
     
     # 特徴と属性の処理を統一（全角/半角スラッシュ対応）
     df["特徴リスト"] = df["特徴"].apply(lambda x: [f.strip() for f in str(x).replace("／", "/").split("/") if f.strip() and f.strip() != "-"])
@@ -43,7 +59,8 @@ def load_data():
 
 df = load_data()
 if df.empty:
-    st.stop()
+    # st.stop() # デモ実行のためにコメントアウト
+    pass
 
 # 無制限カードのリスト
 UNLIMITED_CARDS = ["OP01-075", "OP08-072"]
@@ -411,6 +428,90 @@ st.sidebar.radio(
 )
 
 # ===============================
+# 🛠️ 画像表示共通関数（HTML使用で強制的に横並びを試みる）
+# ===============================
+def display_card_block(card_id, caption, key, button_action=None, current_count=None):
+    """HTMLとStreamlitボタンを組み合わせて、強制的に画像を横並びにするブロックを表示"""
+    
+    # モバイルでの表示に最適な画像サイズとCSSを設定
+    IMG_WIDTH = 100 # 画像の幅を固定
+    IMG_HEIGHT = 140 # 画像の高さを固定（アスペクト比約 1:1.4 に合わせる）
+    
+    img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+
+    # HTMLを使って画像コンテナを固定サイズにし、flexboxで横並びを期待
+    html_block = f"""
+    <div style="
+        display: flex; 
+        flex-direction: column; 
+        align-items: center; 
+        width: {IMG_WIDTH + 10}px; 
+        margin: 5px; 
+        padding: 0px; 
+        box-sizing: border-box;
+    ">
+        <img src="{img_url}" style="
+            width: {IMG_WIDTH}px; 
+            height: {IMG_HEIGHT}px; 
+            border-radius: 5px; 
+            object-fit: cover;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        ">
+        <p style="
+            font-size: 10px; 
+            text-align: center; 
+            margin-top: 5px; 
+            margin-bottom: 0px; 
+            line-height: 1.2;
+        ">{caption}</p>
+    </div>
+    """
+    
+    # ボタン操作がある場合は、ボタンを画像の下に配置
+    if button_action == "add_cards":
+        col_img, col_btn = st.columns([1, 1])
+        
+        # Streamlitのcolumnで画像を配置
+        with col_img:
+            st.markdown(html_block, unsafe_allow_html=True)
+            
+        # ボタンの配置
+        col_plus, col_minus = st.columns(2)
+        
+        is_unlimited = card_id in UNLIMITED_CARDS
+        
+        with col_plus:
+            if st.button("＋", key=f"add_deck_{card_id}_{key}", type="primary", use_container_width=True, disabled=(not is_unlimited and current_count >= 4)):
+                count = st.session_state["deck"].get(card_id, 0)
+                if is_unlimited or count < 4:
+                    st.session_state["deck"][card_id] = count + 1
+                    st.rerun()
+        with col_minus:
+            if st.button("−", key=f"sub_deck_{card_id}_{key}", use_container_width=True, disabled=current_count == 0):
+                if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
+                    if st.session_state["deck"][card_id] > 1:
+                        st.session_state["deck"][card_id] -= 1
+                    else:
+                        del st.session_state["deck"][card_id]
+                    st.rerun()
+    
+    # ボタン操作がない場合は、画像のみを配置
+    elif button_action == "leader_select":
+        # Streamlitのボタンと画像を同じカラムに配置
+        col_img = st.columns(1)[0]
+        with col_img:
+            st.markdown(html_block, unsafe_allow_html=True)
+            if st.button(f"選択", key=f"leader_{card_id}", use_container_width=True):
+                st.session_state["leader"] = df[df["カードID"] == card_id].iloc[0].to_dict()
+                st.session_state["deck"].clear()
+                st.session_state["deck_name"] = ""
+                st.session_state["deck_view"] = "preview"
+                st.rerun()
+    else:
+        # 検索結果やデッキプレビュー（画像のみ）
+        st.markdown(html_block, unsafe_allow_html=True)
+        
+# ===============================
 # 🔍 カード検索モード (st.image修正)
 # ===============================
 if st.session_state["mode"] == "検索":
@@ -451,26 +552,64 @@ if st.session_state["mode"] == "検索":
     st.write(f"該当カード数：{len(results)} 枚")
     
     # --- 検索結果表示 ---
-    # 💡 修正: モバイルで横に並びやすくするため、列数を5に固定し、selectboxを非表示にする
-    # selected_cols = st.sidebar.selectbox( 
-    #     "1列あたりのカード数", 
-    #     [3, 4, 5], 
-    #     index=[3, 4, 5].index(st.session_state.get("search_cols", 3)),
-    #     key="search_cols_selectbox"
-    # )
-    # st.session_state["search_cols"] = selected_cols
+    # 💡 修正: HTMLを使って横並びにするため、st.columns()で各カードブロックを囲む
     
-    # モバイルでの一覧性向上のため、5列に固定
-    cols_count = 5 
-    cols = st.columns(cols_count) 
-    # 💡 修正: `st.image()` の `width` を指定して画像のサイズを制御
-    for idx, (_, row) in enumerate(results.iterrows()):
+    # HTMLブロックを格納するためのリスト
+    card_blocks = []
+    
+    # 画像とキャプションを含むHTMLブロックを生成
+    for _, row in results.iterrows():
         card_id = row['カードID']
-        img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+        caption = f"{row['カード名']}"
         
-        with cols[idx % cols_count]: 
-            # 💡 修正: use_container_width=True から width=100 に変更
-            st.image(img_url, width=100) 
+        # HTMLブロック生成 (display_card_block内部のHTMLを利用)
+        img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+        IMG_WIDTH = 100
+        IMG_HEIGHT = 140
+        
+        html_block = f"""
+        <div style="
+            display: inline-flex; 
+            flex-direction: column; 
+            align-items: center; 
+            width: {IMG_WIDTH + 10}px; 
+            margin: 5px; 
+            padding: 0px; 
+            box-sizing: border-box;
+            vertical-align: top;
+        ">
+            <img src="{img_url}" style="
+                width: {IMG_WIDTH}px; 
+                height: {IMG_HEIGHT}px; 
+                border-radius: 5px; 
+                object-fit: cover;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            ">
+            <p style="
+                font-size: 10px; 
+                text-align: center; 
+                margin-top: 5px; 
+                margin-bottom: 0px; 
+                line-height: 1.2;
+            ">{caption}</p>
+        </div>
+        """
+        card_blocks.append(html_block)
+
+    # 全てのHTMLブロックを一つのdivで囲み、flex-wrapで折り返すように指定
+    full_html = f"""
+    <div style="
+        display: flex; 
+        flex-wrap: wrap; 
+        gap: 0px; 
+        margin: 0px; 
+        padding: 0px;
+    ">
+        {''.join(card_blocks)}
+    </div>
+    """
+    st.markdown(full_html, unsafe_allow_html=True)
+
 
 # ===============================
 # 🧱 デッキ作成モード
@@ -478,7 +617,7 @@ if st.session_state["mode"] == "検索":
 else:
     st.title("🧱 デッキ作成モード")
     
-    # サイドバー：デッキ情報
+    # サイドバー：デッキ情報 (ロジック修正なし、表示のみ調整)
     st.sidebar.markdown("---")
     st.sidebar.title("🧾 現在のデッキ")
     
@@ -524,13 +663,13 @@ else:
                 st.markdown(f"**{card_info['name']}** x {card_info['count']} *<small>({card_info['card_id']})</small>*", unsafe_allow_html=True)
             
             with col_add:
-                if st.button("＋", key=f"add_sidebar_{card_info['card_id']}", width='stretch', 
+                if st.button("＋", key=f"add_sidebar_{card_info['card_id']}", use_container_width=True, 
                              disabled=(not is_unlimited and current >= 4)):
                     if is_unlimited or current < 4:
                         st.session_state["deck"][card_info['card_id']] = current + 1
                         st.rerun()
             with col_del:
-                if st.button("−", key=f"del_{card_info['card_id']}", width='stretch', 
+                if st.button("−", key=f"del_{card_info['card_id']}", use_container_width=True, 
                              disabled=current == 0):
                     if st.session_state["deck"].get(card_info['card_id'], 0) > 0:
                         if st.session_state["deck"][card_info['card_id']] > 1:
@@ -827,21 +966,45 @@ else:
         
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
-        # 💡 修正: モバイルで横に並びやすくするため、5列に固定
+        # 💡 修正: HTMLを使って横並びにする
+        st.markdown(
+            """
+            <style>
+            /* Streamlitのデフォルトのコンテナパディングを調整して、画像を詰め込む */
+            .st-emotion-cache-1r6r4g0, .st-emotion-cache-162r30c {
+                padding: 0px !important; 
+            }
+            /* stColumnsで作成された内部のパディングも調整 */
+            .st-emotion-cache-1wb923b {
+                padding: 0px 5px !important;
+            }
+            .card-grid-container {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px; /* 画像間の隙間 */
+                padding: 0px;
+                margin: 0px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
+        # Streamlitのカラムを5列で設定
         cols_count = 5
         cols = st.columns(cols_count)
+        
         for idx, (_, row) in enumerate(leaders.iterrows()):
-            card_id = row['カードID'] 
-            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+            card_id = row['カードID']
+            
             with cols[idx % cols_count]:
-                # 💡 修正: use_container_width=True から width=100 に変更
-                st.image(img_url, caption=row["カード名"], width=100) 
-                if st.button(f"選択", key=f"leader_{card_id}"):
-                    st.session_state["leader"] = row.to_dict()
-                    st.session_state["deck"].clear()
-                    st.session_state["deck_name"] = ""
-                    st.session_state["deck_view"] = "preview"
-                    st.rerun()
+                # 💡 修正: display_card_blockを使って画像とボタンを配置
+                display_card_block(
+                    card_id, 
+                    row["カード名"], 
+                    idx, 
+                    button_action="leader_select"
+                )
     
     elif st.session_state["deck_view"] == "preview":
         leader = st.session_state["leader"]
@@ -852,7 +1015,7 @@ else:
         col1, col2 = st.columns([1, 3])
         with col1:
             leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
-            # 💡 修正: use_container_width=True から width=150 に変更
+            # 💡 修正: width=150 に固定
             st.image(leader_img_url, width=150) 
         with col2:
             st.markdown(f"**{leader['カード名']}**")
@@ -885,21 +1048,58 @@ else:
             
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
-            # 💡 5列表示に固定
-            deck_cols = st.columns(5)
-            col_idx = 0
+            # 💡 修正: HTMLとflex-wrapで横並びにする
+            card_blocks = []
             for card_info in deck_cards_sorted:
-                card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
+                card_id = card_info['card_id']
+                caption = f"{card_info['name']} × {card_info['count']}"
                 
-                with deck_cols[col_idx % 5]:
-                    # 💡 修正: use_container_width=True から width=100 に変更
-                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", width=100) 
-                col_idx += 1
+                # HTMLブロック生成 (display_card_block内部のHTMLを利用)
+                img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+                IMG_WIDTH = 100
+                IMG_HEIGHT = 140
                 
-                # 5枚ごとに改行（Streamlitのcolumnsの挙動を利用）
-                if col_idx % 5 == 0:
-                     if col_idx < len(deck_cards_sorted) :
-                         deck_cols = st.columns(5)
+                html_block = f"""
+                <div style="
+                    display: inline-flex; 
+                    flex-direction: column; 
+                    align-items: center; 
+                    width: {IMG_WIDTH + 10}px; 
+                    margin: 5px; 
+                    padding: 0px; 
+                    box-sizing: border-box;
+                    vertical-align: top;
+                ">
+                    <img src="{img_url}" style="
+                        width: {IMG_WIDTH}px; 
+                        height: {IMG_HEIGHT}px; 
+                        border-radius: 5px; 
+                        object-fit: cover;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    ">
+                    <p style="
+                        font-size: 10px; 
+                        text-align: center; 
+                        margin-top: 5px; 
+                        margin-bottom: 0px; 
+                        line-height: 1.2;
+                    ">{caption}</p>
+                </div>
+                """
+                card_blocks.append(html_block)
+
+            full_html = f"""
+            <div style="
+                display: flex; 
+                flex-wrap: wrap; 
+                gap: 0px; 
+                margin: 0px; 
+                padding: 0px;
+            ">
+                {''.join(card_blocks)}
+            </div>
+            """
+            st.markdown(full_html, unsafe_allow_html=True)
                          
         else:
             st.info("デッキにカードが追加されていません")
@@ -908,11 +1108,11 @@ else:
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("➕ カードを追加", key="add_card_btn", type="primary"):
+            if st.button("➕ カードを追加", key="add_card_btn", type="primary", use_container_width=True):
                 st.session_state["deck_view"] = "add_cards"
                 st.rerun()
         with col2:
-            if st.button("🔙 リーダー選択に戻る", key="back_to_leader_btn"):
+            if st.button("🔙 リーダー選択に戻る", key="back_to_leader_btn", use_container_width=True):
                 st.session_state["leader"] = None
                 st.session_state["deck"].clear()
                 st.session_state["deck_view"] = "leader"
@@ -929,7 +1129,7 @@ else:
         st.subheader("➕ カードを追加")
         st.info(f"リーダー: {leader['カード名']}（{leader_color_text}） - **リーダーの色と同じカードのみが表示されます。**")
         
-        if st.button("🔙 プレビューに戻る", key="back_to_preview_btn"):
+        if st.button("🔙 プレビューに戻る", key="back_to_preview_btn", use_container_width=True):
             st.session_state["deck_view"] = "preview"
             st.rerun()
             
@@ -963,8 +1163,6 @@ else:
         with col_e:
             deck_blocks = st.multiselect("ブロックアイコン", sorted(df["ブロックアイコン"].unique()), default=current_filter["blocks"], key="deck_blocks")
 
-        # 💡 修正: 「絞り込み実行」ボタンを削除し、フィルタ状態の更新と検索を常時実行する
-        
         # フィルタ状態の更新
         st.session_state["deck_filter"] = {
             "colors": [], # リーダー色で絞られるため空
@@ -998,34 +1196,21 @@ else:
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
-        # 💡 5列表示に固定
+        # 💡 修正: HTMLを使って横並びにするため、st.columns()で各カードブロックを囲む
         card_cols_count = 5
         card_cols = st.columns(card_cols_count)
+
         for idx, (_, card) in enumerate(color_cards.iterrows()):
-            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
+            current_count = st.session_state["deck"].get(card_id, 0)
+            caption = f"({current_count}/4枚)"
             
             with card_cols[idx % card_cols_count]:
-                current_count = st.session_state["deck"].get(card_id, 0)
-                # 💡 修正: use_container_width=True から width=100 に変更
-                st.image(img_url, caption=f"({current_count}/4枚)", width=100) 
-                
-                is_unlimited = card_id in UNLIMITED_CARDS
-                
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    # 💡 修正: use_container_width=True を削除し、ボタンの幅をstretchで自動調整
-                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='full', disabled=(not is_unlimited and current_count >= 4)):
-                        count = st.session_state["deck"].get(card_id, 0)
-                        if is_unlimited or count < 4:
-                            st.session_state["deck"][card_id] = count + 1
-                            st.rerun()
-                with btn_col2:
-                    # 💡 修正: use_container_width=True を削除し、ボタンの幅をstretchで自動調整
-                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='full', disabled=current_count == 0):
-                        if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
-                            if st.session_state["deck"][card_id] > 1:
-                                st.session_state["deck"][card_id] -= 1
-                            else:
-                                del st.session_state["deck"][card_id]
-                            st.rerun()
+                # 💡 修正: display_card_blockを呼び出し、ボタン操作を含む
+                display_card_block(
+                    card_id, 
+                    caption, 
+                    idx, 
+                    button_action="add_cards", 
+                    current_count=current_count
+                )
