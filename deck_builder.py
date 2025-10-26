@@ -10,6 +10,9 @@ import re
 import requests 
 from io import BytesIO 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+# 💡 修正: pyzbarの代わりにOpenCVとNumpyをインポート
+import cv2
+import numpy as np
 
 # ===============================
 # 🧠 キャッシュ付きデータ読み込み
@@ -303,19 +306,19 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     if deck_name:
         try:
             FONT_SIZE = 70 
-            import platform
-            system = platform.system()
-            if system == "Windows":
-                font_name = ImageFont.truetype("msgothic.ttc", FONT_SIZE)
-            elif system == "Darwin":
-                font_name = ImageFont.truetype("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", FONT_SIZE)
-            else:
-                font_name = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", FONT_SIZE)
-        except:
+            # 💡 フォント読み込みの修正: Streamlit Cloudで動作する一般的なパスを優先
             try:
-                font_name = ImageFont.truetype("arial.ttf", FONT_SIZE)
-            except:
-                font_name = ImageFont.load_default()
+                # 一般的なLinux/Cloud環境のフォント
+                font_name = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", FONT_SIZE)
+            except IOError:
+                try:
+                    # Noto Sans CJK（Streamlit Cloudで利用可能であることが多い）
+                    font_name = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", FONT_SIZE)
+                except IOError:
+                    # デフォルトフォント
+                    font_name = ImageFont.load_default()
+        except:
+            font_name = ImageFont.load_default()
         
         bbox = draw.textbbox((0, 0), deck_name, font=font_name)
         text_width = bbox[2] - bbox[0]
@@ -451,7 +454,7 @@ if st.session_state["mode"] == "検索":
         img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
-            # 修正: 詳細expanderを削除し、画像のみを表示
+            # 💡 修正: width='stretch'で幅自動調整を適用
             st.image(img_url, width='stretch') 
 
 # ===============================
@@ -596,7 +599,7 @@ else:
                     mime="image/png"
                 )
     
-    # インポート機能（ロジック修正なし）
+    # インポート機能（OpenCV対応で修正）
     st.sidebar.markdown("---")
     st.sidebar.subheader("📥 デッキをインポート")
     
@@ -609,13 +612,15 @@ else:
     
     if uploaded_qr is not None:
         try:
-            from pyzbar.pyzbar import decode
+            # 💡 OpenCVで画像を読み込み
+            file_bytes = np.asarray(bytearray(uploaded_qr.read()), dtype=np.uint8)
+            qr_image_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+
+            detector = cv2.QRCodeDetector()
+            # 💡 QRコード検出とデータ取得
+            qr_data, points, straight_qrcode = detector.detectAndDecode(qr_image_cv)
             
-            qr_image = Image.open(uploaded_qr)
-            decoded_objects = decode(qr_image)
-            
-            if decoded_objects:
-                qr_data = decoded_objects[0].data.decode('utf-8')
+            if qr_data:
                 st.sidebar.success("QRコードを読み取りました！")
                 
                 lines = [line.strip() for line in qr_data.strip().split("\n") if line.strip()]
@@ -657,9 +662,8 @@ else:
                     st.sidebar.error("デッキリストが空か、リーダーが特定できませんでした。")
             else:
                 st.sidebar.warning("QRコードが検出されませんでした。")
-        except ImportError:
-            st.sidebar.error("QRコード読み取りには pyzbar ライブラリが必要です。\n`pip install pyzbar` でインストールしてください。")
         except Exception as e:
+            # 💡 OpenCVのエラーもキャッチできるように修正
             st.sidebar.error(f"QRコード読み取りエラー: {str(e)}")
     
     st.sidebar.markdown("---")
@@ -810,11 +814,12 @@ else:
         
         cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
-            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{row['カードID']}.png"
+            card_id = row['カードID'] # 💡 追加: card_idを取得
+            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
             with cols[idx % 3]:
                 # 💡 width='stretch'に置き換え
                 st.image(img_url, caption=row["カード名"], width='stretch') 
-                if st.button(f"選択", key=f"leader_{row['カードID']}"):
+                if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
                     st.session_state["deck_name"] = ""
@@ -863,6 +868,7 @@ else:
             
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
+            # 💡 5列表示に変更し、幅を自動調整
             deck_cols = st.columns(5)
             col_idx = 0
             for card_info in deck_cards_sorted:
@@ -873,7 +879,7 @@ else:
                     st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", width='stretch') 
                 col_idx += 1
                 
-                # 5枚ごとに改行
+                # 5枚ごとに改行（Streamlitのcolumnsの挙動を利用）
                 if col_idx % 5 == 0:
                      if col_idx < len(deck_cards_sorted) :
                          deck_cols = st.columns(5)
@@ -975,6 +981,7 @@ else:
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
+        # 💡 5列表示に変更し、幅を自動調整
         card_cols = st.columns(5)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
