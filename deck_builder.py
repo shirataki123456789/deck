@@ -10,7 +10,6 @@ import re
 import requests 
 from io import BytesIO 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-# 💡 修正: pyzbarの代わりにOpenCVとNumpyをインポート
 import cv2
 import numpy as np
 
@@ -101,7 +100,7 @@ if "qr_upload_key" not in st.session_state:
 if "deck_filter" not in st.session_state:
     st.session_state["deck_filter"] = {
         "colors": [],
-        "types": [], # 💡 修正: 初期選択を空リストに変更
+        "types": [], 
         "costs": [],
         "counters": [],
         "attributes": [],
@@ -163,7 +162,7 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
     return results
 
 # ===============================
-# 🖼️ デッキ画像生成関数 
+# 🖼️ デッキ画像生成関数 (文字化け修正)
 # ===============================
 @st.cache_data(ttl=3600, show_spinner=False) 
 def create_deck_image(leader, deck_dict, df, deck_name=""):
@@ -306,20 +305,30 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     if deck_name:
         try:
             FONT_SIZE = 70 
-            # 💡 フォント読み込みの修正: Streamlit Cloudで動作する一般的なパスを優先
+            # 💡 修正: 日本語フォントを確実に読み込む
             try:
-                # 一般的なLinux/Cloud環境のフォント
-                font_name = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", FONT_SIZE)
+                # Noto Sans CJK JP Bold を優先的に使用
+                font_path = "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc"
+                if not os.path.exists(font_path):
+                    # Noto Sans CJK JP Regular（フォント名の違いを吸収）
+                    font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+                
+                # 汎用的なNoto Sans CJKのパスを試す
+                if not os.path.exists(font_path):
+                    font_path = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+                
+                font_name = ImageFont.truetype(font_path, FONT_SIZE)
+
             except IOError:
-                try:
-                    # Noto Sans CJK（Streamlit Cloudで利用可能であることが多い）
-                    font_name = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", FONT_SIZE)
-                except IOError:
-                    # デフォルトフォント
-                    font_name = ImageFont.load_default()
+                # デフォルトフォント
+                font_name = ImageFont.load_default()
         except:
             font_name = ImageFont.load_default()
         
+        # 💡 drawの再初期化
+        draw = ImageDraw.Draw(img) 
+        
+        # テキストボックスの計算
         bbox = draw.textbbox((0, 0), deck_name, font=font_name)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
@@ -330,6 +339,7 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
         bg_y1 = (UPPER_HEIGHT - BG_HEIGHT) // 2
         bg_y2 = bg_y1 + BG_HEIGHT
 
+        # 背景オーバーレイ
         overlay = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
         overlay_draw.rectangle([bg_x1, bg_y1, bg_x2, bg_y2], fill=(0, 0, 0, 128))
@@ -337,6 +347,7 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
         img = Image.alpha_composite(img, overlay)
         draw = ImageDraw.Draw(img) 
 
+        # テキスト位置
         text_x = bg_x1 + (bg_x2 - bg_x1 - text_width) // 2
         text_y = bg_y1 + 20 
 
@@ -399,7 +410,7 @@ st.sidebar.radio(
 )
 
 # ===============================
-# 🔍 カード検索モード (修正箇所なし)
+# 🔍 カード検索モード (st.image修正)
 # ===============================
 if st.session_state["mode"] == "検索":
     st.title("🔍 カード検索")
@@ -454,8 +465,8 @@ if st.session_state["mode"] == "検索":
         img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
-            # 💡 修正: width='stretch'で幅自動調整を適用
-            st.image(img_url, width='stretch') 
+            # 💡 修正: use_column_width=True から use_container_width=True に変更
+            st.image(img_url, use_container_width=True) 
 
 # ===============================
 # 🧱 デッキ作成モード
@@ -577,7 +588,7 @@ else:
                 mime="text/plain"
             )
     
-    # デッキ画像生成 (キャッシュのおかげで高速化)
+    # デッキ画像生成 (st.image修正)
     if st.sidebar.button("🖼️ デッキ画像を生成"):
         if leader is None:
             st.sidebar.warning("リーダーを選択してください。")
@@ -588,8 +599,8 @@ else:
                 buf = io.BytesIO()
                 deck_img.save(buf, format="PNG")
                 buf.seek(0)
-                # 💡 width='stretch'に置き換え
-                st.sidebar.image(deck_img, caption="デッキ画像（QRコード付き）", width='stretch') 
+                # 💡 修正: widthパラメータを削除し、元のサイズで表示する
+                st.sidebar.image(deck_img, caption="デッキ画像（QRコード付き）") 
                 
                 file_name = f"{deck_name}_deck.png" if deck_name else "deck_image.png"
                 st.sidebar.download_button(
@@ -814,11 +825,11 @@ else:
         
         cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
-            card_id = row['カードID'] # 💡 追加: card_idを取得
+            card_id = row['カードID'] 
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
             with cols[idx % 3]:
-                # 💡 width='stretch'に置き換え
-                st.image(img_url, caption=row["カード名"], width='stretch') 
+                # 💡 修正: use_column_width=True から use_container_width=True に変更
+                st.image(img_url, caption=row["カード名"], use_container_width=True) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
@@ -835,8 +846,8 @@ else:
         col1, col2 = st.columns([1, 3])
         with col1:
             leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
-            # 💡 width='stretch'に置き換え
-            st.image(leader_img_url, width='stretch') 
+            # 💡 修正: use_column_width=True から use_container_width=True に変更
+            st.image(leader_img_url, use_container_width=True) 
         with col2:
             st.markdown(f"**{leader['カード名']}**")
             st.markdown(f"色: {leader['色']}")
@@ -875,8 +886,8 @@ else:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
                 with deck_cols[col_idx % 5]:
-                    # 💡 width='stretch'に置き換え
-                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", width='stretch') 
+                    # 💡 修正: use_column_width=True から use_container_width=True に変更
+                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
                 col_idx += 1
                 
                 # 5枚ごとに改行（Streamlitのcolumnsの挙動を利用）
@@ -989,22 +1000,22 @@ else:
             
             with card_cols[idx % 5]:
                 current_count = st.session_state["deck"].get(card_id, 0)
-                # 💡 width='stretch'に置き換え
-                st.image(img_url, caption=f"({current_count}/4枚)", width='stretch') 
+                # 💡 修正: use_column_width=True から use_container_width=True に変更
+                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
+                    # 💡 修正: use_column_width=True から use_container_width=True に変更
+                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", use_container_width=True, disabled=(not is_unlimited and current_count >= 4)):
                         count = st.session_state["deck"].get(card_id, 0)
                         if is_unlimited or count < 4:
                             st.session_state["deck"][card_id] = count + 1
                             st.rerun()
                 with btn_col2:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
+                    # 💡 修正: use_column_width=True から use_container_width=True に変更
+                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", use_container_width=True, disabled=current_count == 0):
                         if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
                             if st.session_state["deck"][card_id] > 1:
                                 st.session_state["deck"][card_id] -= 1
