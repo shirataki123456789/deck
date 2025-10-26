@@ -1,3 +1,4 @@
-# libGL.so.1 が依存するライブラリをインストール
-# libgl1-mesa-glx は libGL.so.1 を提供します
 libgl1-mesa-glx
+libsm6
+libxrender1
+libxext6
