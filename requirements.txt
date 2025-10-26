@@ -3,4 +3,5 @@ pandas
 Pillow
 qrcode
 requests
-pyzbar
+opencv-python
+numpy
