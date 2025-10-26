@@ -92,7 +92,8 @@ if "deck_view" not in st.session_state:
 if "deck_name" not in st.session_state:
     st.session_state["deck_name"] = ""
 if "search_cols" not in st.session_state: 
-    st.session_state["search_cols"] = 3
+    # 💡 修正: モバイルを考慮し、デフォルトを5列に設定（ただし、検索モードでは固定にするため、この値は事実上使用しない）
+    st.session_state["search_cols"] = 5 
 if "qr_upload_key" not in st.session_state: 
     st.session_state["qr_upload_key"] = 0
     
@@ -450,23 +451,26 @@ if st.session_state["mode"] == "検索":
     st.write(f"該当カード数：{len(results)} 枚")
     
     # --- 検索結果表示 ---
-    selected_cols = st.sidebar.selectbox( 
-        "1列あたりのカード数", 
-        [3, 4, 5], 
-        index=[3, 4, 5].index(st.session_state.get("search_cols", 3)),
-        key="search_cols_selectbox"
-    )
-    st.session_state["search_cols"] = selected_cols
+    # 💡 修正: モバイルで横に並びやすくするため、列数を5に固定し、selectboxを非表示にする
+    # selected_cols = st.sidebar.selectbox( 
+    #     "1列あたりのカード数", 
+    #     [3, 4, 5], 
+    #     index=[3, 4, 5].index(st.session_state.get("search_cols", 3)),
+    #     key="search_cols_selectbox"
+    # )
+    # st.session_state["search_cols"] = selected_cols
     
-    cols_count = st.session_state["search_cols"]
+    # モバイルでの一覧性向上のため、5列に固定
+    cols_count = 5 
     cols = st.columns(cols_count) 
+    # 💡 修正: `st.image()` の `width` を指定して画像のサイズを制御
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
         img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
-            # 💡 修正: use_column_width=True から use_container_width=True に変更
-            st.image(img_url, use_container_width=True) 
+            # 💡 修正: use_container_width=True から width=100 に変更
+            st.image(img_url, width=100) 
 
 # ===============================
 # 🧱 デッキ作成モード
@@ -599,8 +603,8 @@ else:
                 buf = io.BytesIO()
                 deck_img.save(buf, format="PNG")
                 buf.seek(0)
-                # 💡 修正: widthパラメータを削除し、元のサイズで表示する
-                st.sidebar.image(deck_img, caption="デッキ画像（QRコード付き）") 
+                # 💡 修正: widthパラメータを追加し、モバイルでサイドバーが狭くなっても適切に表示されるように制御
+                st.sidebar.image(deck_img, caption="デッキ画像（QRコード付き）", width=300) 
                 
                 file_name = f"{deck_name}_deck.png" if deck_name else "deck_image.png"
                 st.sidebar.download_button(
@@ -823,13 +827,15 @@ else:
         
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
-        cols = st.columns(3)
+        # 💡 修正: モバイルで横に並びやすくするため、5列に固定
+        cols_count = 5
+        cols = st.columns(cols_count)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] 
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
-            with cols[idx % 3]:
-                # 💡 修正: use_column_width=True から use_container_width=True に変更
-                st.image(img_url, caption=row["カード名"], use_container_width=True) 
+            with cols[idx % cols_count]:
+                # 💡 修正: use_container_width=True から width=100 に変更
+                st.image(img_url, caption=row["カード名"], width=100) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
@@ -846,8 +852,8 @@ else:
         col1, col2 = st.columns([1, 3])
         with col1:
             leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
-            # 💡 修正: use_column_width=True から use_container_width=True に変更
-            st.image(leader_img_url, use_container_width=True) 
+            # 💡 修正: use_container_width=True から width=150 に変更
+            st.image(leader_img_url, width=150) 
         with col2:
             st.markdown(f"**{leader['カード名']}**")
             st.markdown(f"色: {leader['色']}")
@@ -879,15 +885,15 @@ else:
             
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
-            # 💡 5列表示に変更し、幅を自動調整
+            # 💡 5列表示に固定
             deck_cols = st.columns(5)
             col_idx = 0
             for card_info in deck_cards_sorted:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
                 with deck_cols[col_idx % 5]:
-                    # 💡 修正: use_column_width=True から use_container_width=True に変更
-                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
+                    # 💡 修正: use_container_width=True から width=100 に変更
+                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", width=100) 
                 col_idx += 1
                 
                 # 5枚ごとに改行（Streamlitのcolumnsの挙動を利用）
@@ -992,30 +998,31 @@ else:
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
-        # 💡 5列表示に変更し、幅を自動調整
-        card_cols = st.columns(5)
+        # 💡 5列表示に固定
+        card_cols_count = 5
+        card_cols = st.columns(card_cols_count)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
             
-            with card_cols[idx % 5]:
+            with card_cols[idx % card_cols_count]:
                 current_count = st.session_state["deck"].get(card_id, 0)
-                # 💡 修正: use_column_width=True から use_container_width=True に変更
-                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
+                # 💡 修正: use_container_width=True から width=100 に変更
+                st.image(img_url, caption=f"({current_count}/4枚)", width=100) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
-                    # 💡 修正: use_column_width=True から use_container_width=True に変更
-                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", use_container_width=True, disabled=(not is_unlimited and current_count >= 4)):
+                    # 💡 修正: use_container_width=True を削除し、ボタンの幅をstretchで自動調整
+                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='full', disabled=(not is_unlimited and current_count >= 4)):
                         count = st.session_state["deck"].get(card_id, 0)
                         if is_unlimited or count < 4:
                             st.session_state["deck"][card_id] = count + 1
                             st.rerun()
                 with btn_col2:
-                    # 💡 修正: use_column_width=True から use_container_width=True に変更
-                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", use_container_width=True, disabled=current_count == 0):
+                    # 💡 修正: use_container_width=True を削除し、ボタンの幅をstretchで自動調整
+                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='full', disabled=current_count == 0):
                         if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
                             if st.session_state["deck"][card_id] > 1:
                                 st.session_state["deck"][card_id] -= 1
