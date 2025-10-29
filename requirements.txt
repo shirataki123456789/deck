@@ -1,7 +1,6 @@
 streamlit
 pandas
-Pillow
 qrcode
-requests
-opencv-python
+Pillow
 numpy
+opencv-python
