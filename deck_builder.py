@@ -30,28 +30,34 @@ st.markdown("""
     /* st.columns で作られるコンテナ (親) */
     div[data-testid="stHorizontalBlock"] {
         display: grid !important;
-        /* 📌 修正: 5列固定に変更 (1fr 1fr 1fr 1fr 1fr) */
-        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; 
-        /* 📌 修正: 隙間をゼロに変更 (カード画像を最大化) */
-        gap: 0 !important; 
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; /* 5列固定 */
+        gap: 0 !important; /* グリッド間の隙間をゼロに */
+        padding: 0 !important; /* 親コンテナのパディングをゼロに */
+        margin: 0 !important; /* 親コンテナのマージンをゼロに */
         flex-direction: unset !important;
         flex-wrap: unset !important;
     }
     
-    /* st.columns の中の各列 (子) のレイアウトをリセット */
+    /* st.columns の中の各列 (子) */
     div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
         width: 100% !important; 
+        margin: 0 !important; /* 列自体のマージンをゼロに */
+        padding: 0 !important; /* 列自体のパディングをゼロに */
         flex: unset !important;
         min-width: unset !important; 
-        margin: 0 !important;
     }
     
+    /* 📌 最も強力な隙間削除: グリッド内のすべての要素から余白を削除 */
+    div[data-testid="stHorizontalBlock"] * {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     /* 📱 サイドバーの文字が縦長になる問題の修正 */
-    /* stSidebarContent内のすべての要素に対して、強制改行を解除 */
     div[data-testid="stSidebarContent"] * {
-        word-break: normal !important; /* 強制改行を無効化 */
-        overflow-wrap: break-word !important; /* 必要に応じて単語の区切りで改行 */
-        white-space: normal !important; /* 通常の改行ルールを適用 */
+        word-break: normal !important; 
+        overflow-wrap: break-word !important; 
+        white-space: normal !important; 
     }
 }
 </style>
