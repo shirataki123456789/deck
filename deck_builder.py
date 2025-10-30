@@ -1032,16 +1032,30 @@ else:
         
         color_cards = st.session_state["deck_results"]
         
+        # --- 💡 追加: 1列あたりのカード数選択 ---
+        selected_cols = st.selectbox( 
+            "1列あたりのカード数", 
+            [2, 3, 4, 5], 
+            # 検索モードと設定を共有するため、同じセッションステートを参照
+            index=([2, 3, 4, 5].index(st.session_state.get("search_cols", 3)) 
+                   if st.session_state.get("search_cols", 3) in [2, 3, 4, 5] else 1), 
+            key="add_card_cols_selectbox" # 検索モードとキーを分ける
+        )
+        # st.session_state["search_cols"] を更新して、検索モードとの設定を共有する
+        st.session_state["search_cols"] = selected_cols
+        cols_count = st.session_state["search_cols"]
+        # ----------------------------------------
+        
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
-        # 💡 修正 2B-3: カード追加画面の表示を3列に変更
-        card_cols = st.columns(3)
+        # 💡 修正 2B-3: 固定の3列ではなく、選択された列数を使用
+        card_cols = st.columns(cols_count)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
             
-            with card_cols[idx % 3]: # 💡 修正: 3列表示
+            with card_cols[idx % cols_count]: # 💡 修正: 選択された列数を使用
                 current_count = st.session_state["deck"].get(card_id, 0)
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                 st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
