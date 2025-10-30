@@ -38,7 +38,7 @@ st.markdown("""
         grid-template-columns: 1fr 1fr 1fr !important; 
         
         /* 列と行の隙間を指定 */
-        gap: 0.75rem !important; 
+        /* gap: 0.75rem !important;  */
         
         /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
         flex-direction: unset !important;
