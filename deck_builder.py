@@ -21,63 +21,28 @@ import numpy as np
 st.set_page_config(layout="wide")
 
 # ===============================
-# 📱 修正 3: モバイルでの列崩れを防止するCSS
+# 📱 修正 3 (最終手段: CSS Grid版): モバイルでの列崩れを防止するCSS
 # ===============================
 st.markdown("""
 <style>
-@media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
-    
-    /* 課題1 対策: 
-      div[data-testid="stMain"] を追加し、
-      メインコンテンツ内の st.columns にだけ Grid を適用する
-    */
-    div[data-testid="stMain"] div[data-testid="stHorizontalBlock"] {
-        /* flexbox ではなく grid でレイアウトすることを強制 */
-        display: grid !important;
-        
-        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」 */
-        grid-template-columns: 1fr 1fr 1fr !important; 
-        
-        /* 列と行の隙間を指定 */
-        gap: 0.75rem !important; 
-        
-        /* flex関連のプロパティをリセット */
-        flex-direction: unset !important;
-        flex-wrap: unset !important;
-    }
-    
-    /* メインコンテンツ内の st.columns の「列」 */
-    div[data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-        
-        /* Streamlitが設定する width: 100% や flex-basis を上書き */
-        width: 100% !important; 
-        
-        /* flexアイテムとしての挙動をリセット */
-        flex: unset !important;
-        min-width: unset !important; /* 最小幅もリセット */
-        
-        /* 不要なマージンをリセット */
-        margin: 0 !important;
-    }
-    
-    /* 課題2 対策: 
-      メインコンテンツ内のボタンを大きくし、タップしやすくする
-    */
-    div[data-testid="stMain"] button {
-        /* フォントサイズを少し大きくする */
-        font-size: 1rem !important; 
-        
-        /* ボタンの最小高さを設定 */
-        min-height: 2.25rem !important; /* 約36px */
-        
-        /* ボタン内の余白（パディング）を調整 */
-        padding-top: 0.25rem !important;
-        padding-bottom: 0.25rem !important;
-        
-        /* ボタン内の文字の行高を調整 */
-        line-height: 1.5 !important;
-    }
+/* ... 既存の CSS Grid 修正 ... */
+
+/* 📱 サイドバーの文字が縦長になる問題の修正 */
+/* data-testid="stSidebar" はサイドバー全体を指します */
+div[data-testid="stSidebar"] {
+    /* サイドバー内のテキストを扱うすべての要素に適用 */
+    word-break: normal !important; 
+    overflow-wrap: break-word !important; 
+    /* st.markdown() などで作成したテキストに対する強制改行の解除 */
+    white-space: normal !important; 
 }
+
+/* data-testid="stSidebarContent" はサイドバーのコンテンツエリアを指します */
+div[data-testid="stSidebarContent"] * {
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1062,24 +1027,23 @@ else:
             with card_cols[idx % 3]: # 💡 修正: 3列表示
                 current_count = st.session_state["deck"].get(card_id, 0)
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
+                # st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
-                        count = st.session_state["deck"].get(card_id, 0)
-                        if is_unlimited or count < 4:
-                            st.session_state["deck"][card_id] = count + 1
-                            st.rerun()
-                with btn_col2:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
-                        if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
-                            if st.session_state["deck"][card_id] > 1:
-                                st.session_state["deck"][card_id] -= 1
-                            else:
-                                del st.session_state["deck"][card_id]
-                            st.rerun()
+                # 📌 変更後: st.columns(2)を削除し、縦に配置
+                
+                # ＋ボタンを配置（画面幅いっぱいになる）
+                if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
+                    count = st.session_state["deck"].get(card_id, 0)
+                    if is_unlimited or count < 4:
+                        st.session_state["deck"][card_id] = count + 1
+                        st.rerun()
+                
+                # −ボタンを配置（＋ボタンの下に縦に並ぶ）
+                if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
+                    if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
+                        st.session_state["deck"][card_id] -= 1
+                        if st.session_state["deck"][card_id] == 0:
+                            del st.session_state["deck"][card_id]
+                        st.rerun()
