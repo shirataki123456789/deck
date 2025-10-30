@@ -487,10 +487,10 @@ if st.session_state["mode"] == "検索":
     # 💡 修正 2A: モバイルでの視認性を考慮し、2列を選択肢に追加
     selected_cols = st.sidebar.selectbox( 
         "1列あたりのカード数", 
-        [2, 3, 4, 5], 
+        [5], 
         # 既存の値がない/無効な場合は3列をデフォルトにする
-        index=([2, 3, 4, 5].index(st.session_state.get("search_cols", 3)) 
-               if st.session_state.get("search_cols", 3) in [2, 3, 4, 5] else 1), 
+        index=([5].index(st.session_state.get("search_cols", 3)) 
+               if st.session_state.get("search_cols", 3) in [5] else 1), 
         key="search_cols_selectbox"
     )
     st.session_state["search_cols"] = selected_cols
@@ -923,13 +923,13 @@ else:
             for card_info in deck_cards_sorted:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
-                with deck_cols[col_idx % 3]:
+                with deck_cols[col_idx % 5]:
                     # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                     st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
                 col_idx += 1
                 
                 # 3枚ごとに改行
-                if col_idx % 3 == 0:
+                if col_idx % 5 == 0:
                      if col_idx < len(deck_cards_sorted) :
                          deck_cols = st.columns(5)
                          
