@@ -26,6 +26,19 @@ st.set_page_config(layout="wide")
 # ===============================
 st.markdown("""
 <style>
+
+.main {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* ページ全体の Body/HTML の余白を削除 (念のため) */
+body, html {
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow-x: hidden; /* 横スクロールバーを非表示 */
+}
+
 /* 最終手段: CSS Gridによる強制レイアウト (カードグリッドのモバイル崩れ防止) */
 @media (max-width: 768px) {
     /* st.columns で作られるコンテナ (親) */
