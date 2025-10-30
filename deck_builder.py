@@ -355,7 +355,7 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     img.paste(qr_img.convert("RGBA"), (qr_x, qr_y), qr_img.convert("RGBA"))
     
     # 2. デッキ名（中央）
-if deck_name:
+    if deck_name:
         FONT_SIZE = 70
         font_name = None 
         
