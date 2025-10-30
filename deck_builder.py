@@ -25,39 +25,32 @@ st.set_page_config(layout="wide")
 # ===============================
 st.markdown("""
 <style>
-@media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
-    
+/* 最終手段: CSS Gridによる強制レイアウト (カードグリッドのモバイル崩れ防止) */
+@media (max-width: 768px) {
     /* st.columns で作られるコンテナ (親) */
     div[data-testid="stHorizontalBlock"] {
-        /* flexbox ではなく grid でレイアウトすることを強制 */
         display: grid !important;
-        
-        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
-         これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
-        */
+        /* 💡 修正 1: 強制的に5列にする */
         grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; 
-        
-        /* 列と行の隙間を指定 */
-        gap: 0rem !important; 
-        
-        /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
+        /* 💡 修正 2: ギャップを0にする */
+        gap: 0 !important; 
         flex-direction: unset !important;
         flex-wrap: unset !important;
     }
     
-    /* st.columns の中の各列 (子) */
+    /* st.columns の中の各列 (子) のレイアウトをリセット */
     div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-        
-        /* Streamlitが設定する width: 100% や flex-basis を上書き */
-        /* width: auto または 100% (gridアイテムは親に依存するため) */
         width: 100% !important; 
-        
-        /* flexアイテムとしての挙動をリセット */
         flex: unset !important;
-        min-width: unset !important; /* 最小幅もリセット */
-        
-        /* 不要なマージンをリセット */
+        min-width: unset !important; 
         margin: 0 !important;
+    }
+    
+    /* 📱 サイドバーの文字が縦長になる問題の修正 */
+    div[data-testid="stSidebarContent"] * {
+        word-break: normal !important; 
+        overflow-wrap: break-word !important; 
+        white-space: normal !important; 
     }
 }
 </style>
@@ -867,7 +860,7 @@ else:
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
         # 💡 モバイルでも見やすいように3列に固定
-        cols = st.columns(3)
+        cols = st.columns(5)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] # 💡 追加: card_idを取得
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
@@ -924,7 +917,7 @@ else:
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
             # 💡 修正 2B-2: デッキプレビューの表示を3列に変更
-            deck_cols = st.columns(3)
+            deck_cols = st.columns(5)
             col_idx = 0
             for card_info in deck_cards_sorted:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
@@ -937,7 +930,7 @@ else:
                 # 3枚ごとに改行
                 if col_idx % 3 == 0:
                      if col_idx < len(deck_cards_sorted) :
-                         deck_cols = st.columns(3)
+                         deck_cols = st.columns(5)
                          
         else:
             st.info("デッキにカードが追加されていません")
@@ -1036,7 +1029,7 @@ else:
         st.markdown("---")
         
         # 💡 修正 2B-3: カード追加画面の表示を3列に変更
-        card_cols = st.columns(3)
+        card_cols = st.columns(5)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
