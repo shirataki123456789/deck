@@ -27,38 +27,26 @@ st.markdown("""
 <style>
 /* 最終手段: CSS Gridによる強制レイアウト (カードグリッドのモバイル崩れ防止) */
 @media (max-width: 768px) {
-    /* st.columns で作られるコンテナ (親) */
-    div[data-testid="stHorizontalBlock"] {
-        display: grid !important;
-        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; /* 5列固定 */
-        gap: 0 !important; /* グリッド間の隙間をゼロに */
-        padding: 0 !important; /* 親コンテナのパディングをゼロに */
-        margin: 0 !important; /* 親コンテナのマージンをゼロに */
-        flex-direction: unset !important;
-        flex-wrap: unset !important;
-    }
-    
-    /* st.columns の中の各列 (子) */
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-        width: 100% !important; 
-        margin: 0 !important; /* 列自体のマージンをゼロに */
-        padding: 0 !important; /* 列自体のパディングをゼロに */
-        flex: unset !important;
-        min-width: unset !important; 
-    }
-    
-    /* 📌 最も強力な隙間削除: グリッド内のすべての要素から余白を削除 */
-    div[data-testid="stHorizontalBlock"] * {
-        margin: 0 !important;
-        padding: 0 !important;
-    }
+    /* ... 既存のモバイルCSS ... */
+}
 
-    /* 📱 サイドバーの文字が縦長になる問題の修正 */
-    div[data-testid="stSidebarContent"] * {
-        word-break: normal !important; 
-        overflow-wrap: break-word !important; 
-        white-space: normal !important; 
-    }
+/* 📌 追加: 全ての画面サイズでst.columnsのギャップとパディングを削除 */
+/* st.columns の親コンテナ (div[data-testid="stHorizontalBlock"]) のギャップを削除 */
+div[data-testid="stHorizontalBlock"] {
+    gap: 0 !important; /* カラム間のギャップを削除 */
+}
+
+/* st.columns の中の各列 (子) のパディングを削除 */
+div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
+    padding: 0 !important; /* 各列内のパディングを削除 */
+    margin: 0 !important; /* 各列のマージンを削除 */
+}
+
+/* 📌 st.imageの親要素の余白も削除（カード画像が最も大きくなるように） */
+/* st.columnsの内部にある全ての要素のパディング・マージンを削除 */
+div[data-testid="stHorizontalBlock"] * {
+    margin: 0 !important;
+    padding: 0 !important;
 }
 </style>
 """, unsafe_allow_html=True)
