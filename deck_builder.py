@@ -484,18 +484,9 @@ if st.session_state["mode"] == "検索":
     st.write(f"該当カード数：{len(results)} 枚")
     
     # --- 検索結果表示 ---
-    # 💡 修正 2A: モバイルでの視認性を考慮し、2列を選択肢に追加
-    selected_cols = st.sidebar.selectbox( 
-        "1列あたりのカード数", 
-        [5], 
-        # 既存の値がない/無効な場合は3列をデフォルトにする
-        index=([5].index(st.session_state.get("search_cols", 5)) 
-               if st.session_state.get("search_cols", 5) in [5] else 1), 
-        key="search_cols_selectbox"
-    )
-    st.session_state["search_cols"] = selected_cols
+
     
-    cols_count = st.session_state["search_cols"]
+    cols_count = 5
     cols = st.columns(cols_count) 
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
