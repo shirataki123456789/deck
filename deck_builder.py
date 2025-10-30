@@ -1044,7 +1044,7 @@ else:
             with card_cols[idx % 3]: # 💡 修正: 3列表示
                 current_count = st.session_state["deck"].get(card_id, 0)
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                # st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
+                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
