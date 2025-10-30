@@ -35,10 +35,10 @@ st.markdown("""
         /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
          これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
         */
-        grid-template-columns: 1fr 1fr 1fr !important; 
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; 
         
         /* 列と行の隙間を指定 */
-        gap: 0.75rem !important; 
+        gap: 0rem !important; 
         
         /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
         flex-direction: unset !important;
