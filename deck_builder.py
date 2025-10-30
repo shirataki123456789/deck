@@ -770,7 +770,7 @@ else:
             except Exception as e:
                 st.sidebar.error(f"インポートエラー: {str(e)}")
     
-    # ローカル保存・読込（ロジック修正なし）
+    # ローカル保存・読込（削除機能を追加）
     st.sidebar.markdown("---")
     st.sidebar.subheader("💾 ローカル保存")
     
@@ -807,12 +807,22 @@ else:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(save_text)
             st.sidebar.success(f"デッキ「{current_deck_name}」を保存しました。")
+            st.rerun() # 保存後に選択肢を更新するためにリロード
     
     saved_files = [f[:-4] for f in os.listdir(SAVE_DIR) if f.endswith(".txt")]
-    selected_load = st.sidebar.selectbox("📂 保存済みデッキを読み込み", ["選択なし"] + saved_files)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📂 デッキの読み込みと削除")
+    
+    # デッキ読み込み
+    col_load, col_del = st.sidebar.columns([3, 1])
+    
+    with col_load:
+        selected_load = st.selectbox("読み込みまたは削除するデッキ", ["選択なし"] + saved_files, key="select_deck_to_manage")
     
     if selected_load != "選択なし":
-        if st.sidebar.button("📥 読み込む"):
+        # 読み込みボタン
+        if st.sidebar.button("📥 読み込む", key="load_saved_deck"):
             path = os.path.join(SAVE_DIR, f"{selected_load}.txt")
             try:
                 with open(path, "r", encoding="utf-8") as f:
@@ -858,6 +868,21 @@ else:
             else:
                 st.sidebar.error("読み込みファイルの内容が不正です。")
                 st.rerun()
+
+        # 💡 追加: 削除ボタン
+        with col_del:
+            if st.button("❌ 削除", key="delete_saved_deck"):
+                path = os.path.join(SAVE_DIR, f"{selected_load}.txt")
+                try:
+                    os.remove(path)
+                    st.sidebar.success(f"デッキ「{selected_load}」を削除しました。")
+                    st.session_state["deck_view"] = "leader" # 削除後は初期画面に戻す
+                    st.rerun() # ファイルリストを更新するためにリロード
+                except FileNotFoundError:
+                    st.sidebar.error(f"ファイル {selected_load}.txt が見つかりません。")
+                except Exception as e:
+                    st.sidebar.error(f"削除エラー: {str(e)}")
+            
     
     # メインエリア：リーダー選択 / デッキプレビュー / カード追加
     if st.session_state["deck_view"] == "leader" or st.session_state["leader"] is None:
@@ -1032,7 +1057,7 @@ else:
         
         color_cards = st.session_state["deck_results"]
         
-        # --- 💡 追加: 1列あたりのカード数選択 ---
+        # --- 💡 修正: 1列あたりのカード数選択 ---
         selected_cols = st.selectbox( 
             "1列あたりのカード数", 
             [2, 3, 4, 5], 
