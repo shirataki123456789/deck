@@ -27,6 +27,45 @@ st.markdown("""
 <style>
 /* ... 既存の CSS Grid 修正 ... */
 
+<style>
+@media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
+    
+    /* st.columns で作られるコンテナ (親) */
+    div[data-testid="stHorizontalBlock"] {
+        /* flexbox ではなく grid でレイアウトすることを強制 */
+        display: grid !important;
+        
+        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
+         これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
+        */
+        grid-template-columns: 1fr 1fr 1fr !important; 
+        
+        /* 列と行の隙間を指定 */
+        gap: 0.75rem !important; 
+        
+        /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
+        flex-direction: unset !important;
+        flex-wrap: unset !important;
+    }
+    
+    /* st.columns の中の各列 (子) */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
+        
+        /* Streamlitが設定する width: 100% や flex-basis を上書き */
+        /* width: auto または 100% (gridアイテムは親に依存するため) */
+        width: 100% !important; 
+        
+        /* flexアイテムとしての挙動をリセット */
+        flex: unset !important;
+        min-width: unset !important; /* 最小幅もリセット */
+        
+        /* 不要なマージンをリセット */
+        margin: 0 !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 /* 📱 サイドバーの文字が縦長になる問題の修正 */
 /* data-testid="stSidebar" はサイドバー全体を指します */
 div[data-testid="stSidebar"] {
