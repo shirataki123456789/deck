@@ -25,30 +25,27 @@ st.set_page_config(layout="wide")
 # ===============================
 st.markdown("""
 <style>
-@media (max-width: 640px) { /* Streamlitのモバイル用ブレークポイント */
+@media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
     
-    /* st.columns で作られるコンテナ */
+    /* st.columns で作られるコンテナ (親) */
     div[data-testid="stHorizontalBlock"] {
-        /* モバイルでも強制的に行(row)として振る舞う */
-        flex-direction: row !important; 
-        /* 画面幅が足りない場合は折り返す */
-        flex-wrap: wrap !important;
-        /* 折り返した際の隙間を調整 */
-        row-gap: 1rem; 
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: wrap !important; /* 折り返しを強制 */
+        row-gap: 1rem !important; /* 縦の隙間 */
+        column-gap: 0.5rem !important; /* 横の隙間 */
     }
     
-    /* st.columns の中の各列 */
+    /* st.columns の中の各列 (子) */
     div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-        /* 列が縮むときの最小幅を指定 */
-        /* (150pxにすると、iPhone幅(〜375px)で2列になります) */
-        min-width: 150px !important; 
         
-        /* 3列にしたい場合 (かなり小さくなります) */
-        /* min-width: 110px !important; */
-        
-        /* 列が拡大・縮小する際の基準サイズ */
-        flex-basis: 0 !important;
+        /* iPhone 15 Pro Max (幅430px) で3列にするための設定
+        (33.3%から隙間分を引いたイメージ)
+        */
+        flex-basis: 30% !important;  /* 基本幅を30%に */
         flex-grow: 1 !important;
+        flex-shrink: 1 !important;
+        min-width: 120px !important; /* 最小幅（これ以上縮まない） */
     }
 }
 </style>
