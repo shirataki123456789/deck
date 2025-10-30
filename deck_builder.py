@@ -359,22 +359,34 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
         FONT_SIZE = 70
         font_name = ImageFont.load_default() # 初期値をデフォルトに設定 (最終手段)
         
-        # 💡 修正: Web (Linux) と Windows の日本語フォントを優先して安全に読み込むロジック
-        # 成功した時点で break して、font_nameに日本語フォントがセットされる
+        # 💡 修正: Web (Linux) と Windows の日本語フォントを優先して安全に読み込むロジックを再修正
+        # .ttcファイル対策として、フォントパスとインデックスのタプルリストに変更し、安定性を向上させました。
         font_paths_to_try = [
             # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-            "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+            # Noto CJK (index 0を明示)
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
+            # Noto Sans JP (Linuxでの一般的なパス, indexなし)
+            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
+            # Noto CJK OTF (異なるパスのOTFファイル, indexなし)
+            ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
             
             # 2. ローカル Windows で高確率で利用可能な日本語フォント
-            "C:\\Windows\\Fonts\\meiryo.ttc",
-            "C:\\Windows\\Fonts\\msgothic.ttc",
-            "C:\\Windows\\Fonts\\msmincho.ttc",
+            # meiryo.ttc (index 0を明示)
+            ("C:\\Windows\\Fonts\\meiryo.ttc", 0), 
+            # msgothic.ttc (index 0を明示)
+            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
+            # msmincho.ttc (index 0を明示)
+            ("C:\\Windows\\Fonts\\msmincho.ttc", 0),
         ]
         
-        for path in font_paths_to_try:
+        for path, index in font_paths_to_try:
             try:
-                font_name = ImageFont.truetype(path, FONT_SIZE)
+                if index is not None:
+                    # indexを指定して読み込み（.ttcファイル対策）
+                    font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
+                else:
+                    # indexを指定せずに読み込み
+                    font_name = ImageFont.truetype(path, FONT_SIZE)
                 break # 成功したらループを抜ける
             except IOError:
                 continue # 次のフォントを試す
