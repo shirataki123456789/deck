@@ -22,12 +22,31 @@ st.set_page_config(layout="wide")
 
 # ===============================
 # 📱 修正 3 (最終手段: CSS Grid版): モバイルでの列崩れを防止するCSS
+# 📌 修正: カード間の余白を削除し、大きく表示するCSSを追加
 # ===============================
 st.markdown("""
 <style>
 /* 最終手段: CSS Gridによる強制レイアウト (カードグリッドのモバイル崩れ防止) */
 @media (max-width: 768px) {
-    /* ... 既存のモバイルCSS ... */
+    /* st.columns で作られるコンテナ (親) */
+    div[data-testid="stHorizontalBlock"] {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; /* 5列固定 */
+        gap: 0 !important; /* グリッド間の隙間をゼロに */
+        padding: 0 !important; /* 親コンテナのパディングをゼロに */
+        margin: 0 !important; /* 親コンテナのマージンをゼロに */
+        flex-direction: unset !important;
+        flex-wrap: unset !important;
+    }
+    /* st.columns で作られる各カラム (子) */
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
+        min-width: unset !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        padding: 0 !important; /* 各列内のパディングを削除 */
+        margin: 0 !important; /* 各列のマージンを削除 */
+        flex: 1 1 auto !important;
+    }
 }
 
 /* 📌 追加: 全ての画面サイズでst.columnsのギャップとパディングを削除 */
@@ -47,6 +66,17 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
 div[data-testid="stHorizontalBlock"] * {
     margin: 0 !important;
     padding: 0 !important;
+}
+
+/* st.image に付いている余白を削除 (念のため) */
+img {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* st.image のキャプション（枚数表示）の行間を詰める */
+[data-testid="stCaptionContainer"] {
+    margin-bottom: 0px !important; /* 画像とキャプション間の余白を削除 */
 }
 </style>
 """, unsafe_allow_html=True)
