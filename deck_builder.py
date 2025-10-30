@@ -1002,7 +1002,7 @@ else:
 
         # UIの再構築：カード検索モードと同等のフィルタ
         # 💡 フィルタUIは3列を維持（コンテンツが多いため）
-        col_a, col_b, col_c = st.columns(3)
+        col_a, col_b, col_c = st.columns(5)
         with col_a:
             # 💡 修正: default=[] により初期選択をなしにする
             deck_types = st.multiselect("タイプ", ["CHARACTER", "EVENT", "STAGE"], default=current_filter["types"], key="deck_types")
@@ -1018,7 +1018,7 @@ else:
             deck_series_ids = st.multiselect("入手シリーズ", all_series_ids, default=current_filter["series_ids"], key="deck_series_ids")
             
         # 1行で配置
-        col_d, col_e = st.columns([3, 1])
+        col_d, col_e = st.columns([5, 1])
         with col_d:
             deck_free = st.text_input("フリーワード（カード名/特徴/テキスト/トリガー）", value=current_filter["free_words"], key="deck_free")
         with col_e:
