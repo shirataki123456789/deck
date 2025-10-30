@@ -27,29 +27,29 @@ st.markdown("""
 <style>
 @media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
     
-    /* st.columns で作られるコンテナ (親) */
-    div[data-testid="stHorizontalBlock"] {
+    /* 課題1 対策: 
+      div[data-testid="stMain"] を追加し、
+      メインコンテンツ内の st.columns にだけ Grid を適用する
+    */
+    div[data-testid="stMain"] div[data-testid="stHorizontalBlock"] {
         /* flexbox ではなく grid でレイアウトすることを強制 */
         display: grid !important;
         
-        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
-         これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
-        */
+        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」 */
         grid-template-columns: 1fr 1fr 1fr !important; 
         
         /* 列と行の隙間を指定 */
-        /* gap: 0.75rem !important;  */
+        gap: 0.75rem !important; 
         
-        /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
+        /* flex関連のプロパティをリセット */
         flex-direction: unset !important;
         flex-wrap: unset !important;
     }
     
-    /* st.columns の中の各列 (子) */
-    div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
+    /* メインコンテンツ内の st.columns の「列」 */
+    div[data-testid="stMain"] div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
         
         /* Streamlitが設定する width: 100% や flex-basis を上書き */
-        /* width: auto または 100% (gridアイテムは親に依存するため) */
         width: 100% !important; 
         
         /* flexアイテムとしての挙動をリセット */
@@ -58,6 +58,24 @@ st.markdown("""
         
         /* 不要なマージンをリセット */
         margin: 0 !important;
+    }
+    
+    /* 課題2 対策: 
+      メインコンテンツ内のボタンを大きくし、タップしやすくする
+    */
+    div[data-testid="stMain"] button {
+        /* フォントサイズを少し大きくする */
+        font-size: 1rem !important; 
+        
+        /* ボタンの最小高さを設定 */
+        min-height: 2.25rem !important; /* 約36px */
+        
+        /* ボタン内の余白（パディング）を調整 */
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
+        
+        /* ボタン内の文字の行高を調整 */
+        line-height: 1.5 !important;
     }
 }
 </style>
