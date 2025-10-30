@@ -489,8 +489,8 @@ if st.session_state["mode"] == "検索":
         "1列あたりのカード数", 
         [5], 
         # 既存の値がない/無効な場合は3列をデフォルトにする
-        index=([5].index(st.session_state.get("search_cols", 3)) 
-               if st.session_state.get("search_cols", 3) in [5] else 1), 
+        index=([5].index(st.session_state.get("search_cols", 5)) 
+               if st.session_state.get("search_cols", 5) in [5] else 1), 
         key="search_cols_selectbox"
     )
     st.session_state["search_cols"] = selected_cols
