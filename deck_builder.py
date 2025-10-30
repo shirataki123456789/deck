@@ -355,38 +355,43 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     img.paste(qr_img.convert("RGBA"), (qr_x, qr_y), qr_img.convert("RGBA"))
     
     # 2. デッキ名（中央）
-    if deck_name:
+if deck_name:
         FONT_SIZE = 70
-        # 💡 修正 1: 初期値を None に設定し、TrueTypeフォントが読み込まれたかを確認する
         font_name = None 
         
-        # 💡 修正 2: Web (Linux) と Windows の日本語フォントに加え、Linux汎用フォントを追加
+        # 💡 最終修正: アプリに同梱したフォントを最優先で試行する
+        # ファイル名: NotoSansJP-Regular.ttf (事前にアップロードが必要です)
+        BUNDLED_FONT_PATH = "NotoSansJP-Regular.ttf"
+
+        # Streamlit Cloud環境での文字化け対策として、以下の順で試行
         font_paths_to_try = [
-            # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
-            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
-            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
+            # 1. アプリに同梱したフォント（最優先）
+            (BUNDLED_FONT_PATH, None),
+            
+            # 2. 前回の修正で試したStreamlit Cloud/Linux 環境の標準パス
+            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None),
             ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
-            
-            # 2. ローカル Windows で高確率で利用可能な日本語フォント
-            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
-            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
-            
-            # 3. Linux/Streamlit Cloud環境で高確率で利用可能な汎用フォント (英語名対策)
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
             ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
             ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", None),
+
+            # 3. ローカル Windows のパス (Streamlit Cloudでは無視される)
+            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
+            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
         ]
         
         for path, index in font_paths_to_try:
             try:
-                if index is not None:
-                    font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
-                else:
-                    font_name = ImageFont.truetype(path, FONT_SIZE)
-                break # 成功したらループを抜ける
+                if os.path.exists(path): # ファイルが存在するかチェックを追加
+                    if index is not None:
+                        font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
+                    else:
+                        font_name = ImageFont.truetype(path, FONT_SIZE)
+                    break # 成功したらループを抜ける
             except IOError:
                 continue # 次のフォントを試す
 
-        # 💡 修正 3: 全てのTrueTypeフォントの読み込みに失敗した場合、ImageFont.load_default()を最終手段として使う
+        # 💡 最終フォールバック
         if font_name is None:
              font_name = ImageFont.load_default() 
         
