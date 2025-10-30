@@ -1010,7 +1010,7 @@ else:
                 
                 with deck_cols[col_idx % 3]:
                     # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
+                    st.image(card_img_url, use_container_width=True) 
                 col_idx += 1
                 
                 # 3枚ごとに改行
