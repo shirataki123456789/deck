@@ -13,19 +13,16 @@ import cv2
 import numpy as np
 
 # ===============================
-# 🛠️ 修正 1: アプリ全体を Wide Mode に設定
+# 🛠️ アプリ全体を Wide Mode に設定
 # ===============================
 st.set_page_config(layout="wide")
 
 # ===============================
-# 💡 修正 3: カスタムCSSの埋め込み
+# 💡 カスタムCSSの埋め込み（表示専用エリアのみに適用）
 # ===============================
-
-# カードを強制的に横並びにするFlexboxレイアウト
-# モバイルでもカードの最小幅（150px）を維持し、オーバーフローでスクロール可能にする
 CUSTOM_CSS = """
 <style>
-/* Streamlitのメインコンテンツのパディングを削除し、コンテンツ領域を最大化 */
+/* Streamlitのメインコンテンツのパディングを調整 */
 .main .block-container {
     padding-top: 1rem;
     padding-right: 1rem;
@@ -33,26 +30,22 @@ CUSTOM_CSS = """
     padding-bottom: 1rem;
 }
 
-/* カードリスト表示エリアのFlexbox設定 */
+/* カードリスト表示エリアのFlexbox設定 (検索結果など、ボタンがないエリア用) */
 .card-list-container {
     display: flex;
-    flex-wrap: wrap; /* 狭い画面では折り返しを許可 (ただし項目内が強制横並び) */
-    gap: 10px; /* カード間の間隔 */
+    flex-wrap: wrap; 
+    gap: 10px; 
     margin-top: 10px;
-    
-    /* 狭い画面で全体を横スクロールさせるための設定 (オプション) */
-    /* overflow-x: auto; */
-    /* flex-wrap: nowrap; */ 
 }
 
 /* 各カードアイテムのスタイル */
 .card-item {
-    min-width: 150px; /* カードの最小表示幅 */
-    max-width: 250px; /* 広い画面での最大幅 */
-    flex-grow: 1; /* 成長を許可 */
-    flex-basis: 150px; /* 基本的な幅 */
+    min-width: 150px; 
+    max-width: 250px; 
+    flex-grow: 1; 
+    flex-basis: 150px; 
     text-align: center;
-    overflow: hidden; /* 画像がはみ出さないように */
+    overflow: hidden; 
     padding-bottom: 20px;
 }
 
@@ -64,34 +57,13 @@ CUSTOM_CSS = """
     width: 100%;
 }
 
-/* Streamlitの画像をHTML/CSSで制御 */
-.card-item img {
-    width: 100%;
-    height: auto;
-    object-fit: contain;
-    border-radius: 5px;
-}
-
-/* カードボタンのコンテナ */
-.card-button-group {
-    display: flex;
-    width: 100%;
-    max-width: 150px; /* ボタンの最大幅をカード幅に合わせる */
-    margin-top: 5px;
-}
-
-.stButton>button {
-    flex-grow: 1; /* ボタンが等幅になるように */
-    margin: 0 2px !important;
-}
-
-/* デッキプレビューのカードリストを強制的に3列に維持し、モバイルでは横スクロールさせる */
+/* デッキプレビューのカードリストを強制的に横スクロールさせる */
 .preview-card-list {
     display: flex;
     flex-wrap: nowrap; /* 強制的に折り返さない */
     gap: 10px;
     overflow-x: auto; /* 横スクロールを許可 */
-    padding-bottom: 10px; /* スクロールバーのためのスペース */
+    padding-bottom: 10px; 
 }
 
 /* デッキプレビューのカードアイテム */
@@ -468,7 +440,7 @@ st.sidebar.radio(
 )
 
 # ===============================
-# 🔍 カード検索モード 
+# 🔍 カード検索モード (表示のみのため、カスタムCSSを維持)
 # ===============================
 if st.session_state["mode"] == "検索":
     st.title("🔍 カード検索")
@@ -477,7 +449,6 @@ if st.session_state["mode"] == "検索":
     st.sidebar.markdown("---")
     st.sidebar.subheader("検索フィルタ")
     
-    # ... (フィルタ UI のロジックは変更なし)
     colors = st.sidebar.multiselect("色を選択", color_order, key="search_colors")
     types = st.sidebar.multiselect("タイプを選択", list(type_priority.keys()), key="search_types")
     costs = st.sidebar.multiselect("コストを選択", sorted(df["コスト数値"].unique()), key="search_costs")
@@ -497,12 +468,9 @@ if st.session_state["mode"] == "検索":
     
     results = st.session_state["search_results"]
     
-    # 該当カード数表示
     st.write(f"該当カード数：{len(results)} 枚")
     
-    # 検索結果表示
-    # 💡 修正 3A: st.columns をやめ、HTML/CSS (card-list-container) で表示
-    
+    # 💡 修正 3A: st.columns をやめ、HTML/CSS (card-list-container) で表示 (ボタンがないため安定)
     card_html = '<div class="card-list-container">'
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
@@ -519,8 +487,6 @@ if st.session_state["mode"] == "検索":
     card_html += '</div>'
     st.markdown(card_html, unsafe_allow_html=True)
     
-    # 注意: st.sidebar.selectbox("1列あたりのカード数", ...) は、カスタムCSSを使うことで意味がなくなるため削除しました。
-    # 代わりに、カードは画面幅に応じて動的に横に並びます。
 
 # ===============================
 # 🧱 デッキ作成モード
@@ -530,7 +496,6 @@ else:
     st.title("🧱 デッキ作成モード")
     
     # サイドバー：デッキ情報
-    # ... (省略: サイドバーの表示ロジックは変更なし)
     st.sidebar.markdown("---")
     st.sidebar.title("🧾 現在のデッキ")
     leader = st.session_state.get("leader")
@@ -542,6 +507,7 @@ else:
     total_cards = sum(st.session_state["deck"].values())
     st.sidebar.markdown(f"**合計カード:** {total_cards}/50")
     
+    # ... (サイドバーのカード枚数調整ロジックは変更なし) ...
     if st.session_state["deck"]:
         deck_cards = []
         for card_id, count in st.session_state["deck"].items():
@@ -577,6 +543,7 @@ else:
                         st.rerun()
             st.sidebar.markdown("---")
     
+    # ... (サイドバーのその他のロジックは変更なし) ...
     if total_cards > 50:
         st.sidebar.error("⚠️ 50枚を超えています！")
     elif total_cards < 50:
@@ -633,18 +600,17 @@ else:
                 file_name = f"{deck_name}_deck.png" if deck_name else "deck_image.png"
                 st.sidebar.download_button(label="📥 画像をダウンロード", data=buf, file_name=file_name, mime="image/png")
     
+    # インポート機能のロジックは変更なし
     st.sidebar.markdown("---")
     st.sidebar.subheader("📥 デッキをインポート")
     st.sidebar.markdown("**QRコード画像からインポート**")
     uploaded_qr = st.sidebar.file_uploader("QRコード画像をアップロード", type=["png", "jpg", "jpeg"], key=f"qr_upload_{st.session_state['qr_upload_key']}")
-    
     if uploaded_qr is not None:
         try:
             file_bytes = np.asarray(bytearray(uploaded_qr.read()), dtype=np.uint8)
             qr_image_cv = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
             detector = cv2.QRCodeDetector()
             qr_data, points, straight_qrcode = detector.detectAndDecode(qr_image_cv)
-            
             if qr_data:
                 st.sidebar.success("QRコードを読み取りました！")
                 lines = [line.strip() for line in qr_data.strip().split("\n") if line.strip()]
@@ -653,7 +619,6 @@ else:
                 if lines and lines[0].startswith("#"):
                     imported_deck_name = lines[0][1:].strip()
                     start_idx = 1
-                
                 if start_idx < len(lines):
                     first_line = lines[start_idx]
                     if "x" not in first_line:
@@ -664,7 +629,6 @@ else:
                         st.session_state["leader"] = leader_row.iloc[0].to_dict()
                         st.session_state["deck"] = {}
                         st.session_state["deck_name"] = imported_deck_name
-                        
                         for line in lines[start_idx + 1:]:
                             if "x" in line:
                                 count, card_id = line.split("x")
@@ -703,14 +667,11 @@ else:
                     if lines[0].startswith("#"):
                         imported_deck_name = lines[0][1:].strip()
                         start_idx = 1
-                    
                     if start_idx < len(lines):
                         first_line = lines[start_idx]
                         if "x" not in first_line:
                              raise ValueError("デッキリスト形式が不正です（リーダー行に'x'がない）。")
-                             
                         leader_count, leader_id = first_line.split("x")
-                             
                         leader_row = df[df["カードID"] == leader_id]
                         if leader_row.empty:
                             st.sidebar.error(f"リーダーカード {leader_id} が見つかりません。")
@@ -718,7 +679,6 @@ else:
                             st.session_state["leader"] = leader_row.iloc[0].to_dict()
                             st.session_state["deck"] = {}
                             st.session_state["deck_name"] = imported_deck_name
-                            
                             for line in lines[start_idx + 1:]:
                                 if "x" in line:
                                     count, card_id = line.split("x")
@@ -726,7 +686,6 @@ else:
                                     card_row = df[df["カードID"] == card_id]
                                     if not card_row.empty:
                                         st.session_state["deck"][card_id] = count
-                            
                             st.session_state["deck_view"] = "preview"
                             st.sidebar.success("デッキをインポートしました！")
                             st.rerun()
@@ -810,49 +769,25 @@ else:
                 st.sidebar.error("読み込みファイルの内容が不正です。")
                 st.rerun()
     
-    # メインエリア：リーダー選択 / デッキプレビュー / カード追加
+    # メインエリア：リーダー選択
     if st.session_state["deck_view"] == "leader" or st.session_state["leader"] is None:
         st.subheader("① リーダーを選択")
         leaders = df[df["タイプ"] == "LEADER"]
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
-        # 💡 修正 3B: st.columns をやめ、HTML/CSS (card-list-container) で表示
-        leader_html = '<div class="card-list-container">'
+        # 💡 修正 3B: st.columns に戻す（安定性優先）
+        cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID']
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
-            
-            # st.buttonをカスタムキーで表示し、HTMLのdiv内に埋め込む
-            st_button_key = f"leader_{card_id}"
-            st_button_placeholder = st.empty() # ボタンのプレースホルダー
-            
-            leader_html += f"""
-            <div class="card-item">
-                <div class="card-content-container">
-                    <img src="{img_url}">
-                    <p style="margin: 5px 0 0; font-size: 0.8rem;">{row["カード名"]}</p>
-                    <div id="leader-btn-{card_id}"></div>
-                </div>
-            </div>
-            """
-        
-        leader_html += '</div>'
-        st.markdown(leader_html, unsafe_allow_html=True)
-
-        # HTMLを先に描画した後、Pythonのボタンを所定のIDに挿入
-        for idx, (_, row) in enumerate(leaders.iterrows()):
-             card_id = row['カードID']
-             with st.container():
-                st.markdown(f'<div id="insert-leader-btn-{card_id}"></div>', unsafe_allow_html=True)
-                if st.button(f"選択", key=f"leader_{card_id}"):
+            with cols[idx % 3]:
+                st.image(img_url, caption=row["カード名"], use_container_width=True) 
+                if st.button(f"選択", key=f"leader_{card_id}", use_container_width=True):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
                     st.session_state["deck_name"] = ""
                     st.session_state["deck_view"] = "preview"
                     st.rerun()
-             # 挿入されたボタンを所定のIDのdivに移動させるためのJavaScriptを挿入（簡略化のため省略、このままだとボタンの位置がズレるが、Streamlitの制約上これが簡便）
-             # 正確な配置には複雑なJavaScriptが必要になるため、ここでは見栄えよりも機能維持を優先
-
     
     elif st.session_state["deck_view"] == "preview":
         leader = st.session_state["leader"]
@@ -893,7 +828,7 @@ else:
                 })
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
-            # 💡 修正 3C: st.columns をやめ、HTML/CSS (preview-card-list) で表示
+            # 💡 修正 3C: st.columns をやめ、HTML/CSS (preview-card-list) で表示（横スクロール維持）
             preview_html = '<div class="preview-card-list">'
             for card_info in deck_cards_sorted:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
@@ -905,9 +840,9 @@ else:
                     <p style="font-size: 0.9rem; font-weight: bold; margin: 0;">× {card_info['count']}</p>
                 </div>
                 """
-                         
             preview_html += '</div>'
             st.markdown(preview_html, unsafe_allow_html=True)
+            
         else:
             st.info("デッキにカードが追加されていません")
         
@@ -928,7 +863,7 @@ else:
                 st.rerun()
     
     else:
-        # ③ カード追加画面（検索フィルタを拡張）
+        # ③ カード追加画面
         leader = st.session_state["leader"]
         leader_color_text = leader["色"]
         leader_colors = [c.strip() for c in leader_color_text.replace("／", "/").split("/") if c.strip()]
@@ -982,55 +917,30 @@ else:
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
-        # 💡 修正 3D: st.columns をやめ、HTML/CSS (card-list-container) で表示
-        card_add_html = '<div class="card-list-container">'
-        
-        # ボタンを配置するためのプレースホルダーリスト
-        button_containers = []
-        
+        # 💡 修正 3D: st.columns に戻す（安定性優先）
+        card_cols = st.columns(3)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
-            current_count = st.session_state["deck"].get(card_id, 0)
             
-            # ボタンを埋め込むためのカスタムIDを設定
-            btn_container_id = f"btn_group_{card_id}_{idx}"
-            
-            card_add_html += f"""
-            <div class="card-item">
-                <div class="card-content-container">
-                    <img src="{img_url}">
-                    <p style="margin: 5px 0; font-size: 0.8rem;">({current_count}/4枚)</p>
-                    <div id="{btn_container_id}" class="card-button-group"></div>
-                </div>
-            </div>
-            """
-            button_containers.append((card_id, idx, btn_container_id, current_count))
-            
-        card_add_html += '</div>'
-        
-        # HTMLを先に描画
-        st.markdown(card_add_html, unsafe_allow_html=True)
-
-        # PythonのボタンをHTMLの描画後に配置 (ボタンの位置がずれる場合がありますが、機能維持のため)
-        for card_id, idx, btn_container_id, current_count in button_containers:
-            is_unlimited = card_id in UNLIMITED_CARDS
-            
-            # Streamlitの列を使い、ボタンを横並びにする
-            btn_col_a, btn_col_b = st.columns(2)
-            
-            with btn_col_a:
-                # ユーザーがクリックしたときに st.rerun() が発生し、全てのボタンが再描画されます
-                if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
-                    count = st.session_state["deck"].get(card_id, 0)
-                    if is_unlimited or count < 4:
-                        st.session_state["deck"][card_id] = count + 1
-                        st.rerun()
-            with btn_col_b:
-                if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
-                    if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
-                        if st.session_state["deck"][card_id] > 1:
-                            st.session_state["deck"][card_id] -= 1
-                        else:
-                            del st.session_state["deck"][card_id]
-                        st.rerun()
+            with card_cols[idx % 3]: 
+                current_count = st.session_state["deck"].get(card_id, 0)
+                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
+                
+                is_unlimited = card_id in UNLIMITED_CARDS
+                
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
+                        count = st.session_state["deck"].get(card_id, 0)
+                        if is_unlimited or count < 4:
+                            st.session_state["deck"][card_id] = count + 1
+                            st.rerun()
+                with btn_col2:
+                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
+                        if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
+                            if st.session_state["deck"][card_id] > 1:
+                                st.session_state["deck"][card_id] -= 1
+                            else:
+                                del st.session_state["deck"][card_id]
+                            st.rerun()
