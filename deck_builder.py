@@ -356,43 +356,81 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     
     # 2. デッキ名（中央）
     if deck_name:
-        try:
-            FONT_SIZE = 70 
-            # 💡 フォント読み込みの修正: Streamlit Cloudで動作する一般的なパスを優先
+        FONT_SIZE = 70
+        font_name = ImageFont.load_default() # 初期値をデフォルトに設定 (最終手段)
+        
+        # 💡 修正: Web (Linux) と Windows の日本語フォントを優先して安全に読み込むロジック
+        # 成功した時点で break して、font_nameに日本語フォントがセットされる
+        font_paths_to_try = [
+            # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf",
+            
+            # 2. ローカル Windows で高確率で利用可能な日本語フォント
+            "C:\\Windows\\Fonts\\meiryo.ttc",
+            "C:\\Windows\\Fonts\\msgothic.ttc",
+            "C:\\Windows\\Fonts\\msmincho.ttc",
+        ]
+        
+        for path in font_paths_to_try:
             try:
-                # 一般的なLinux/Cloud環境のフォント
-                font_name = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", FONT_SIZE)
+                font_name = ImageFont.truetype(path, FONT_SIZE)
+                break # 成功したらループを抜ける
             except IOError:
-                try:
-                    # Noto Sans CJK（Streamlit Cloudで利用可能であることが多い）
-                    font_name = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", FONT_SIZE)
-                except IOError:
-                    # デフォルトフォント
-                    font_name = ImageFont.load_default()
+                continue # 次のフォントを試す
+        
+        try:
+            # 描画処理
+            bbox = draw.textbbox((0, 0), deck_name, font=font_name)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            
+            BG_HEIGHT = text_height + 40 
+            bg_x1 = deck_name_area_start_x + 50 
+            bg_x2 = deck_name_area_start_x + DECK_NAME_AREA_WIDTH - 50
+            bg_y1 = (UPPER_HEIGHT - BG_HEIGHT) // 2
+            bg_y2 = bg_y1 + BG_HEIGHT
+
+            overlay = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (0, 0, 0, 0))
+            overlay_draw = ImageDraw.Draw(overlay)
+            overlay_draw.rectangle([bg_x1, bg_y1, bg_x2, bg_y2], fill=(0, 0, 0, 128))
+            
+            img = Image.alpha_composite(img, overlay)
+            draw = ImageDraw.Draw(img) 
+
+            text_x = bg_x1 + (bg_x2 - bg_x1 - text_width) // 2
+            text_y = bg_y1 + 20 
+
+            draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
+            
         except:
-            font_name = ImageFont.load_default()
-        
-        bbox = draw.textbbox((0, 0), deck_name, font=font_name)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        
-        BG_HEIGHT = text_height + 40 
-        bg_x1 = deck_name_area_start_x + 50 
-        bg_x2 = deck_name_area_start_x + DECK_NAME_AREA_WIDTH - 50
-        bg_y1 = (UPPER_HEIGHT - BG_HEIGHT) // 2
-        bg_y2 = bg_y1 + BG_HEIGHT
+            # 描画中にエラーが発生した場合の最終手段
+            try:
+                # デフォルトフォントで再描画を試みる
+                font_name = ImageFont.load_default()
+                bbox = draw.textbbox((0, 0), deck_name, font=font_name)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                
+                BG_HEIGHT = text_height + 40 
+                bg_x1 = deck_name_area_start_x + 50 
+                bg_x2 = deck_name_area_start_x + DECK_NAME_AREA_WIDTH - 50
+                bg_y1 = (UPPER_HEIGHT - BG_HEIGHT) // 2
+                bg_y2 = bg_y1 + BG_HEIGHT
 
-        overlay = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (0, 0, 0, 0))
-        overlay_draw = ImageDraw.Draw(overlay)
-        overlay_draw.rectangle([bg_x1, bg_y1, bg_x2, bg_y2], fill=(0, 0, 0, 128))
-        
-        img = Image.alpha_composite(img, overlay)
-        draw = ImageDraw.Draw(img) 
+                overlay = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (0, 0, 0, 0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                overlay_draw.rectangle([bg_x1, bg_y1, bg_x2, bg_y2], fill=(0, 0, 0, 128))
+                
+                img = Image.alpha_composite(img, overlay)
+                draw = ImageDraw.Draw(img) 
 
-        text_x = bg_x1 + (bg_x2 - bg_x1 - text_width) // 2
-        text_y = bg_y1 + 20 
+                text_x = bg_x1 + (bg_x2 - bg_x1 - text_width) // 2
+                text_y = bg_y1 + 20 
 
-        draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
+                draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
+            except:
+                pass # 完全に失敗した場合は何もしない
     
     # 下セクション：デッキカード（10x5グリッド）
     y_start = UPPER_HEIGHT 
