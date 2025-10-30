@@ -357,39 +357,38 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     # 2. デッキ名（中央）
     if deck_name:
         FONT_SIZE = 70
-        font_name = ImageFont.load_default() # 初期値をデフォルトに設定 (最終手段)
+        # 💡 修正 1: 初期値を None に設定し、TrueTypeフォントが読み込まれたかを確認する
+        font_name = None 
         
-        # 💡 修正: Web (Linux) と Windows の日本語フォントを優先して安全に読み込むロジックを再修正
-        # .ttcファイル対策として、フォントパスとインデックスのタプルリストに変更し、安定性を向上させました。
+        # 💡 修正 2: Web (Linux) と Windows の日本語フォントに加え、Linux汎用フォントを追加
         font_paths_to_try = [
             # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
-            # Noto CJK (index 0を明示)
             ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
-            # Noto Sans JP (Linuxでの一般的なパス, indexなし)
             ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
-            # Noto CJK OTF (異なるパスのOTFファイル, indexなし)
             ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
             
             # 2. ローカル Windows で高確率で利用可能な日本語フォント
-            # meiryo.ttc (index 0を明示)
-            ("C:\\Windows\\Fonts\\meiryo.ttc", 0), 
-            # msgothic.ttc (index 0を明示)
+            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
             ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
-            # msmincho.ttc (index 0を明示)
-            ("C:\\Windows\\Fonts\\msmincho.ttc", 0),
+            
+            # 3. Linux/Streamlit Cloud環境で高確率で利用可能な汎用フォント (英語名対策)
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
+            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", None),
         ]
         
         for path, index in font_paths_to_try:
             try:
                 if index is not None:
-                    # indexを指定して読み込み（.ttcファイル対策）
                     font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
                 else:
-                    # indexを指定せずに読み込み
                     font_name = ImageFont.truetype(path, FONT_SIZE)
                 break # 成功したらループを抜ける
             except IOError:
                 continue # 次のフォントを試す
+
+        # 💡 修正 3: 全てのTrueTypeフォントの読み込みに失敗した場合、ImageFont.load_default()を最終手段として使う
+        if font_name is None:
+             font_name = ImageFont.load_default() 
         
         try:
             # 描画処理
@@ -415,10 +414,10 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
 
             draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
             
-        except:
-            # 描画中にエラーが発生した場合の最終手段
+        except Exception as e:
+            # 描画中にエラーが発生した場合の最終手段（最終フォールバック）
             try:
-                # デフォルトフォントで再描画を試みる
+                # デフォルトフォントで再描画を試みる（このfont_nameは小さいが、表示はされる）
                 font_name = ImageFont.load_default()
                 bbox = draw.textbbox((0, 0), deck_name, font=font_name)
                 text_width = bbox[2] - bbox[0]
