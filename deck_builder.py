@@ -22,74 +22,43 @@ st.set_page_config(layout="wide")
 
 # ===============================
 # 📱 修正 3 (最終手段: CSS Grid版): モバイルでの列崩れを防止するCSS
-# 📌 修正: カード間の余白を削除し、大きく表示するCSSを追加
 # ===============================
 st.markdown("""
 <style>
-
-.main {
-    padding: 0 !important;
-    margin: 0 !important;
-}
-
-/* ページ全体の Body/HTML の余白を削除 (念のため) */
-body, html {
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow-x: hidden; /* 横スクロールバーを非表示 */
-}
-
-/* 最終手段: CSS Gridによる強制レイアウト (カードグリッドのモバイル崩れ防止) */
-@media (max-width: 768px) {
+@media (max-width: 768px) { /* モバイルとタブレットのブレークポイント */
+    
     /* st.columns で作られるコンテナ (親) */
     div[data-testid="stHorizontalBlock"] {
+        /* flexbox ではなく grid でレイアウトすることを強制 */
         display: grid !important;
-        grid-template-columns: 1fr 1fr 1fr 1fr 1fr !important; /* 5列固定 */
-        gap: 0 !important; /* グリッド間の隙間をゼロに */
-        padding: 0 !important; /* 親コンテナのパディングをゼロに */
-        margin: 0 !important; /* 親コンテナのマージンをゼロに */
+        
+        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
+         これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
+        */
+        grid-template-columns: 1fr 1fr 1fr !important; 
+        
+        /* 列と行の隙間を指定 */
+        gap: 0.75rem !important; 
+        
+        /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
         flex-direction: unset !important;
         flex-wrap: unset !important;
     }
-    /* st.columns で作られる各カラム (子) */
+    
+    /* st.columns の中の各列 (子) */
     div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-        min-width: unset !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 0 !important; /* 各列内のパディングを削除 */
-        margin: 0 !important; /* 各列のマージンを削除 */
-        flex: 1 1 auto !important;
+        
+        /* Streamlitが設定する width: 100% や flex-basis を上書き */
+        /* width: auto または 100% (gridアイテムは親に依存するため) */
+        width: 100% !important; 
+        
+        /* flexアイテムとしての挙動をリセット */
+        flex: unset !important;
+        min-width: unset !important; /* 最小幅もリセット */
+        
+        /* 不要なマージンをリセット */
+        margin: 0 !important;
     }
-}
-
-/* 📌 追加: 全ての画面サイズでst.columnsのギャップとパディングを削除 */
-/* st.columns の親コンテナ (div[data-testid="stHorizontalBlock"]) のギャップを削除 */
-div[data-testid="stHorizontalBlock"] {
-    gap: 0 !important; /* カラム間のギャップを削除 */
-}
-
-/* st.columns の中の各列 (子) のパディングを削除 */
-div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-    padding: 0 !important; /* 各列内のパディングを削除 */
-    margin: 0 !important; /* 各列のマージンを削除 */
-}
-
-/* 📌 st.imageの親要素の余白も削除（カード画像が最も大きくなるように） */
-/* st.columnsの内部にある全ての要素のパディング・マージンを削除 */
-div[data-testid="stHorizontalBlock"] * {
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-/* st.image に付いている余白を削除 (念のため) */
-img {
-    margin: 0 !important;
-    padding: 0 !important;
-}
-
-/* st.image のキャプション（枚数表示）の行間を詰める */
-[data-testid="stCaptionContainer"] {
-    margin-bottom: 0px !important; /* 画像とキャプション間の余白を削除 */
 }
 </style>
 """, unsafe_allow_html=True)
@@ -521,9 +490,18 @@ if st.session_state["mode"] == "検索":
     st.write(f"該当カード数：{len(results)} 枚")
     
     # --- 検索結果表示 ---
-
+    # 💡 修正 2A: モバイルでの視認性を考慮し、2列を選択肢に追加
+    selected_cols = st.sidebar.selectbox( 
+        "1列あたりのカード数", 
+        [2, 3, 4, 5], 
+        # 既存の値がない/無効な場合は3列をデフォルトにする
+        index=([2, 3, 4, 5].index(st.session_state.get("search_cols", 3)) 
+               if st.session_state.get("search_cols", 3) in [2, 3, 4, 5] else 1), 
+        key="search_cols_selectbox"
+    )
+    st.session_state["search_cols"] = selected_cols
     
-    cols_count = 5
+    cols_count = st.session_state["search_cols"]
     cols = st.columns(cols_count) 
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
@@ -889,13 +867,13 @@ else:
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
         # 💡 モバイルでも見やすいように3列に固定
-        cols = st.columns(5)
+        cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] # 💡 追加: card_idを取得
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
-            with cols[idx % 5]:
+            with cols[idx % 3]:
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                st.image(img_url, use_container_width=True) 
+                st.image(img_url, caption=row["カード名"], use_container_width=True) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
@@ -946,20 +924,20 @@ else:
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
             # 💡 修正 2B-2: デッキプレビューの表示を3列に変更
-            deck_cols = st.columns(5)
+            deck_cols = st.columns(3)
             col_idx = 0
             for card_info in deck_cards_sorted:
                 card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
-                with deck_cols[col_idx % 5]:
+                with deck_cols[col_idx % 3]:
                     # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                     st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
                 col_idx += 1
                 
                 # 3枚ごとに改行
-                if col_idx % 5 == 0:
+                if col_idx % 3 == 0:
                      if col_idx < len(deck_cards_sorted) :
-                         deck_cols = st.columns(5)
+                         deck_cols = st.columns(3)
                          
         else:
             st.info("デッキにカードが追加されていません")
@@ -1002,7 +980,7 @@ else:
 
         # UIの再構築：カード検索モードと同等のフィルタ
         # 💡 フィルタUIは3列を維持（コンテンツが多いため）
-        col_a, col_b, col_c = st.columns(5)
+        col_a, col_b, col_c = st.columns(3)
         with col_a:
             # 💡 修正: default=[] により初期選択をなしにする
             deck_types = st.multiselect("タイプ", ["CHARACTER", "EVENT", "STAGE"], default=current_filter["types"], key="deck_types")
@@ -1018,7 +996,7 @@ else:
             deck_series_ids = st.multiselect("入手シリーズ", all_series_ids, default=current_filter["series_ids"], key="deck_series_ids")
             
         # 1行で配置
-        col_d, col_e = st.columns([5, 1])
+        col_d, col_e = st.columns([3, 1])
         with col_d:
             deck_free = st.text_input("フリーワード（カード名/特徴/テキスト/トリガー）", value=current_filter["free_words"], key="deck_free")
         with col_e:
@@ -1058,31 +1036,32 @@ else:
         st.markdown("---")
         
         # 💡 修正 2B-3: カード追加画面の表示を3列に変更
-        card_cols = st.columns(5)
+        card_cols = st.columns(3)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
             
-            with card_cols[idx % 5]: # 💡 修正: 3列表示
+            with card_cols[idx % 3]: # 💡 修正: 3列表示
                 current_count = st.session_state["deck"].get(card_id, 0)
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                 st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
-                # 📌 変更後: st.columns(2)を削除し、縦に配置
-                
-                # ＋ボタンを配置（画面幅いっぱいになる）
-                if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
-                    count = st.session_state["deck"].get(card_id, 0)
-                    if is_unlimited or count < 4:
-                        st.session_state["deck"][card_id] = count + 1
-                        st.rerun()
-                
-                # −ボタンを配置（＋ボタンの下に縦に並ぶ）
-                if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
-                    if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
-                        st.session_state["deck"][card_id] -= 1
-                        if st.session_state["deck"][card_id] == 0:
-                            del st.session_state["deck"][card_id]
-                        st.rerun()
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    # 💡 width='stretch'に置き換え
+                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
+                        count = st.session_state["deck"].get(card_id, 0)
+                        if is_unlimited or count < 4:
+                            st.session_state["deck"][card_id] = count + 1
+                            st.rerun()
+                with btn_col2:
+                    # 💡 width='stretch'に置き換え
+                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
+                        if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
+                            if st.session_state["deck"][card_id] > 1:
+                                st.session_state["deck"][card_id] -= 1
+                            else:
+                                del st.session_state["deck"][card_id]
+                            st.rerun()
