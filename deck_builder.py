@@ -856,9 +856,9 @@ else:
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] # 💡 追加: card_idを取得
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
-            with cols[idx % 3]:
+            with cols[idx % 5]:
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                st.image(img_url, caption=row["カード名"], use_container_width=True) 
+                st.image(img_url, use_container_width=True) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
@@ -1026,7 +1026,7 @@ else:
             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
             
-            with card_cols[idx % 3]: # 💡 修正: 3列表示
+            with card_cols[idx % 5]: # 💡 修正: 3列表示
                 current_count = st.session_state["deck"].get(card_id, 0)
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                 st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
