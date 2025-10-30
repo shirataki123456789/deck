@@ -211,6 +211,48 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
     )
     return results
 
+# 💡 修正 4A: Noto Sans JPのURLを定義
+# 安定して取得できるGitHubの生ファイルURLを使用
+NOTO_SANS_JP_URL = "https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf"
+
+# 💡 修正 4B: フォントをURLから取得してキャッシュする関数
+@st.cache_data(ttl=3600*24, show_spinner=False)
+def load_japanese_font(url, size):
+    """URLからフォントをダウンロードし、PIL用にロードしてキャッシュする"""
+    try:
+        # ダウンロード
+        response = requests.get(url, timeout=5)
+        response.raise_for_status() 
+        font_bytes = BytesIO(response.content)
+        
+        # PILでロード
+        # 💡 BytesIOから読み込み
+        return ImageFont.truetype(font_bytes, size) 
+    except Exception as e:
+        # st.error(f"警告: 日本語フォントをURLからロードできませんでした ({e})。ローカルフォントを試します。")
+        
+        # ローカルパスを試す（前回の修正で網羅したパス）
+        font_paths_to_try = [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
+            ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
+            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
+            ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", None), 
+            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
+            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
+        ]
+        
+        for path, index in font_paths_to_try:
+            try:
+                if index is not None:
+                    return ImageFont.truetype(path, size, index=index)
+                else:
+                    return ImageFont.truetype(path, size)
+            except IOError:
+                continue 
+        
+        return ImageFont.load_default() # 最終手段
+
+
 # ===============================
 # 🖼️ デッキ画像生成関数 
 # ===============================
@@ -357,46 +399,10 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     # 2. デッキ名（中央）
     if deck_name:
         FONT_SIZE = 70
-        font_name = None 
         
-        # 💡 修正: 日本語フォントのパスをさらに網羅的に追加
-        font_paths_to_try = [
-            # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
-            # Noto CJK TTC (index 0を明示)
-            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
-            # Noto CJK OTF (Common path)
-            ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
-            # Noto JP TTF/OTF (Alternative common paths)
-            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
-            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.ttf", None), 
-            # 汎用的な日本語フォントのパッケージパス
-            ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", None), 
-            
-            # 2. ローカル Windows で高確率で利用可能な日本語フォント
-            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
-            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
-            
-            # 3. 一般的なLinux TrueTypeフォント（英語名対策としてサイズ保持優先）
-            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
-            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", None),
-        ]
-        
-        for path, index in font_paths_to_try:
-            try:
-                if index is not None:
-                    # indexを指定して読み込み（.ttcファイル対策）
-                    font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
-                else:
-                    # indexを指定せずに読み込み
-                    font_name = ImageFont.truetype(path, FONT_SIZE)
-                break # 成功したらループを抜ける
-            except IOError:
-                continue # 次のフォントを試す
+        # 💡 修正 4C: URLからのフォントロードを優先
+        font_name = load_japanese_font(NOTO_SANS_JP_URL, FONT_SIZE)
 
-        # 全てのTrueTypeフォントの読み込みに失敗した場合、ImageFont.load_default()を最終手段として使う
-        if font_name is None:
-             font_name = ImageFont.load_default() 
-        
         try:
             # 描画処理
             bbox = draw.textbbox((0, 0), deck_name, font=font_name)
