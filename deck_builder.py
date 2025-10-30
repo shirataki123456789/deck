@@ -360,8 +360,8 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
         font_name = None 
         
         # 💡 最終修正: アプリに同梱したフォントを最優先で試行する
-        # ファイル名: NotoSansJP-Regular.ttf (事前にアップロードが必要です)
-        BUNDLED_FONT_PATH = "NotoSansJP-VariableFont_wght.ttf"
+        # ファイル名: meiryo.ttc (事前にアップロードが必要です)
+        BUNDLED_FONT_PATH = "meiryo.ttc"
 
         # Streamlit Cloud環境での文字化け対策として、以下の順で試行
         font_paths_to_try = [
