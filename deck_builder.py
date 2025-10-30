@@ -211,48 +211,6 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
     )
     return results
 
-# 💡 修正 4A: Noto Sans JPのURLを定義
-# 安定して取得できるGitHubの生ファイルURLを使用
-NOTO_SANS_JP_URL = "https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/OTF/Japanese/NotoSansJP-Regular.otf"
-
-# 💡 修正 4B: フォントをURLから取得してキャッシュする関数
-@st.cache_data(ttl=3600*24, show_spinner=False)
-def load_japanese_font(url, size):
-    """URLからフォントをダウンロードし、PIL用にロードしてキャッシュする"""
-    try:
-        # ダウンロード
-        response = requests.get(url, timeout=5)
-        response.raise_for_status() 
-        font_bytes = BytesIO(response.content)
-        
-        # PILでロード
-        # 💡 BytesIOから読み込み
-        return ImageFont.truetype(font_bytes, size) 
-    except Exception as e:
-        # st.error(f"警告: 日本語フォントをURLからロードできませんでした ({e})。ローカルフォントを試します。")
-        
-        # ローカルパスを試す（前回の修正で網羅したパス）
-        font_paths_to_try = [
-            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
-            ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
-            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
-            ("/usr/share/fonts/truetype/fonts-japanese-gothic.ttf", None), 
-            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
-            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
-        ]
-        
-        for path, index in font_paths_to_try:
-            try:
-                if index is not None:
-                    return ImageFont.truetype(path, size, index=index)
-                else:
-                    return ImageFont.truetype(path, size)
-            except IOError:
-                continue 
-        
-        return ImageFont.load_default() # 最終手段
-
-
 # ===============================
 # 🖼️ デッキ画像生成関数 
 # ===============================
@@ -399,10 +357,39 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     # 2. デッキ名（中央）
     if deck_name:
         FONT_SIZE = 70
+        # 💡 修正 1: 初期値を None に設定し、TrueTypeフォントが読み込まれたかを確認する
+        font_name = None 
         
-        # 💡 修正 4C: URLからのフォントロードを優先
-        font_name = load_japanese_font(NOTO_SANS_JP_URL, FONT_SIZE)
+        # 💡 修正 2: Web (Linux) と Windows の日本語フォントに加え、Linux汎用フォントを追加
+        font_paths_to_try = [
+            # 1. Streamlit Cloud (Linux) で高確率で利用可能な日本語フォント
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0), 
+            ("/usr/share/fonts/truetype/noto/NotoSansJP-Regular.otf", None), 
+            ("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", None),
+            
+            # 2. ローカル Windows で高確率で利用可能な日本語フォント
+            ("C:\\Windows\\Fonts\\meiryo.ttc", 0),
+            ("C:\\Windows\\Fonts\\msgothic.ttc", 0),
+            
+            # 3. Linux/Streamlit Cloud環境で高確率で利用可能な汎用フォント (英語名対策)
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", None),
+            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", None),
+        ]
+        
+        for path, index in font_paths_to_try:
+            try:
+                if index is not None:
+                    font_name = ImageFont.truetype(path, FONT_SIZE, index=index)
+                else:
+                    font_name = ImageFont.truetype(path, FONT_SIZE)
+                break # 成功したらループを抜ける
+            except IOError:
+                continue # 次のフォントを試す
 
+        # 💡 修正 3: 全てのTrueTypeフォントの読み込みに失敗した場合、ImageFont.load_default()を最終手段として使う
+        if font_name is None:
+             font_name = ImageFont.load_default() 
+        
         try:
             # 描画処理
             bbox = draw.textbbox((0, 0), deck_name, font=font_name)
@@ -428,9 +415,9 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
             draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
             
         except Exception as e:
-            # 描画中にエラーが発生した場合の最終手段（極小文字で描画される可能性あり）
+            # 描画中にエラーが発生した場合の最終手段（最終フォールバック）
             try:
-                # デフォルトフォントで再描画を試みる
+                # デフォルトフォントで再描画を試みる（このfont_nameは小さいが、表示はされる）
                 font_name = ImageFont.load_default()
                 bbox = draw.textbbox((0, 0), deck_name, font=font_name)
                 text_width = bbox[2] - bbox[0]
