@@ -29,23 +29,35 @@ st.markdown("""
     
     /* st.columns で作られるコンテナ (親) */
     div[data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: wrap !important; /* 折り返しを強制 */
-        row-gap: 1rem !important; /* 縦の隙間 */
-        column-gap: 0.5rem !important; /* 横の隙間 */
+        /* flexbox ではなく grid でレイアウトすることを強制 */
+        display: grid !important;
+        
+        /* 1fr 1fr 1fr は「利用可能なスペースを3等分する」という意味です。
+         これにより、iPhoneの画面幅でも強制的に3つの列を作ります。
+        */
+        grid-template-columns: 1fr 1fr 1fr !important; 
+        
+        /* 列と行の隙間を指定 */
+        gap: 0.75rem !important; 
+        
+        /* Streamlitが設定する可能性のあるflex関連のプロパティをリセット */
+        flex-direction: unset !important;
+        flex-wrap: unset !important;
     }
     
     /* st.columns の中の各列 (子) */
     div[data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
         
-        /* iPhone 15 Pro Max (幅430px) で3列にするための設定
-        (33.3%から隙間分を引いたイメージ)
-        */
-        flex-basis: 30% !important;  /* 基本幅を30%に */
-        flex-grow: 1 !important;
-        flex-shrink: 1 !important;
-        min-width: 120px !important; /* 最小幅（これ以上縮まない） */
+        /* Streamlitが設定する width: 100% や flex-basis を上書き */
+        /* width: auto または 100% (gridアイテムは親に依存するため) */
+        width: 100% !important; 
+        
+        /* flexアイテムとしての挙動をリセット */
+        flex: unset !important;
+        min-width: unset !important; /* 最小幅もリセット */
+        
+        /* 不要なマージンをリセット */
+        margin: 0 !important;
     }
 }
 </style>
