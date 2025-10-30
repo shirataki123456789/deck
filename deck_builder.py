@@ -60,22 +60,6 @@ st.markdown("""
         margin: 0 !important;
     }
 }
-* 📱 サイドバーの文字が縦長になる問題の修正 */
-/* data-testid="stSidebar" はサイドバー全体を指します */
-div[data-testid="stSidebar"] {
-    /* サイドバー内のテキストを扱うすべての要素に適用 */
-    word-break: normal !important; 
-    overflow-wrap: break-word !important; 
-    /* st.markdown() などで作成したテキストに対する強制改行の解除 */
-    white-space: normal !important; 
-}
-
-/* data-testid="stSidebarContent" はサイドバーのコンテンツエリアを指します */
-div[data-testid="stSidebarContent"] * {
-    word-break: normal !important;
-    overflow-wrap: break-word !important;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
