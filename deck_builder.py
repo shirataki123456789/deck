@@ -9,15 +9,17 @@ import base64
 import re 
 import requests 
 from io import BytesIO 
+# 💡 修正: ThreadPoolExecutorを使用しないため、関連するimportを削除
+# from concurrent.futures import ThreadPoolExecutor, as_completed 
+# 💡 修正: pyzbarの代わりにOpenCVとNumpyをインポート
 import cv2
 import numpy as np
 
-# 💡 修正: cardフォルダへのパスを設定
-CARD_IMAGE_DIR = "card"
-# 💡 修正: ローカルパス生成関数
-def get_local_image_path(card_id):
-    """カードIDからローカルの画像ファイルパスを生成する"""
-    return os.path.join(CARD_IMAGE_DIR, f"{card_id}.png")
+# ===============================
+# 🛠️ 修正 1: アプリ全体を Wide Mode に設定
+# ===============================
+st.set_page_config(layout="wide")
+
 
 # ===============================
 # 🧠 キャッシュ付きデータ読み込み
@@ -227,8 +229,11 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     # カード画像のサイズ（下部グリッド用）
     card_width = 215
     card_height = 300
-    cards_per_row = 10
+    
+    # 💡 修正 2B-1: モバイル対応のため、グリッドの列数を10から3に変更（画像生成時は10列を維持）
+    cards_per_row = 10 
     cards_per_col = 5
+    
     margin_card = 0
     
     # 画像作成 (RGBAモードで初期化)
@@ -254,33 +259,27 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
             b = int(rgb1[2] * (1 - ratio) + rgb2[2] * ratio)
             draw.line([(x, 0), (x, FINAL_HEIGHT)], fill=(r, g, b))
     
-    # 画像ダウンロード関数 
-    # 💡 修正: ローカルファイルから画像を読み込むように変更 
-    def load_card_image(card_id, target_size, crop_top_half=False):
+    # 画像ダウンロード関数
+    def download_card_image(card_id, target_size, crop_top_half=False):
         try:
-            # cardフォルダからのローカルパスを使用
-            image_path = get_local_image_path(card_id) 
-            if not os.path.exists(image_path):
-                 # ローカルファイルがない場合はNoneを返す
-                return card_id, None 
+            card_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+            response = requests.get(card_url, timeout=5)
+            if response.status_code == 200:
+                card_img = Image.open(BytesIO(response.content)).convert("RGBA")
                 
-            card_img = Image.open(image_path).convert("RGBA")
-            
-            if crop_top_half:
-                CROPPED_WIDTH = target_size[0]
-                CROPPED_HEIGHT = target_size[1]
-                
-                # 元のコードの比率計算ロジックを維持
-                full_height_target = CROPPED_HEIGHT * 2 
-                card_img = card_img.resize((CROPPED_WIDTH, full_height_target), Image.LANCZOS)
-                
-                card_img = card_img.crop((0, 0, CROPPED_WIDTH, CROPPED_HEIGHT))
-            else:
-                card_img = card_img.resize(target_size, Image.LANCZOS) 
-                
-            return card_id, card_img
+                if crop_top_half:
+                    CROPPED_WIDTH = target_size[0]
+                    CROPPED_HEIGHT = target_size[1]
+                    
+                    full_height_target = CROPPED_HEIGHT * 2 
+                    card_img = card_img.resize((CROPPED_WIDTH, full_height_target), Image.LANCZOS)
+                    
+                    card_img = card_img.crop((0, 0, CROPPED_WIDTH, CROPPED_HEIGHT))
+                else:
+                    card_img = card_img.resize(target_size, Image.LANCZOS) 
+                    
+                return card_id, card_img
         except Exception as e:
-            st.error(f"画像ロードエラー ({card_id}): {e}")
             return card_id, None
 
     # --- 上セクションの配置（リーダー → デッキ名 → QR） ---
@@ -304,14 +303,11 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
 
     # 1. リーダー画像を配置 
     try:
-        # 💡 修正: load_card_imageを使用
-        _, leader_img = load_card_image(leader['カードID'], LEADER_TARGET_SIZE, crop_top_half=True) 
+        _, leader_img = download_card_image(leader['カードID'], LEADER_TARGET_SIZE, crop_top_half=True) 
         if leader_img:
             img.paste(leader_img, (leader_x, leader_y), leader_img) 
-        else:
-            st.warning(f"リーダー画像 {leader['カードID']}.png が {CARD_IMAGE_DIR} フォルダに見つかりません。")
-    except Exception as e:
-        st.error(f"リーダー画像配置エラー: {e}")
+    except:
+        pass
 
     # 3. QRコードを配置 
     img.paste(qr_img.convert("RGBA"), (qr_x, qr_y), qr_img.convert("RGBA"))
@@ -320,43 +316,20 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     if deck_name:
         try:
             FONT_SIZE = 70 
-            
-            # 💡 修正: Windows標準フォントのパスを優先的に試す
-            
-            # Windows標準搭載のフォントパスをリストアップ
-            font_paths = [
-                # 1. Windows: Meiryo UI (日本語環境で最も一般的なフォント)
-                "C:/Windows/Fonts/meiryo.ttc",
-                # 2. Windows: Yu Gothic (Windows 8以降)
-                "C:/Windows/Fonts/yugothic.ttc",
-                # 3. Linux/Cloud: Noto Sans CJK (Streamlit Cloudなど)
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                # 4. Linux/Cloud: Liberation Sans (汎用的なフォント)
-                "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            ]
-            
-            loaded_font = False
-            for path in font_paths:
+            # 💡 フォント読み込みの修正: Streamlit Cloudで動作する一般的なパスを優先
+            try:
+                # 一般的なLinux/Cloud環境のフォント
+                font_name = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", FONT_SIZE)
+            except IOError:
                 try:
-                    # Windowsフォントの場合、Meiryo UIは第2ウェイト（Bold）が必要な場合があるため、
-                    # インデックス0で試行し、失敗したら次のフォントへ
-                    font_name = ImageFont.truetype(path, FONT_SIZE, encoding="utf-8")
-                    loaded_font = True
-                    break
+                    # Noto Sans CJK（Streamlit Cloudで利用可能であることが多い）
+                    font_name = ImageFont.truetype("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", FONT_SIZE)
                 except IOError:
-                    continue # 次のフォントパスを試す
-            
-            if not loaded_font:
-                # すべてのパスで失敗した場合、PILのデフォルトフォントを使用
-                font_name = ImageFont.load_default()
-                st.warning("警告: システムフォントが見つからなかったため、デフォルトフォントを使用しました。")
-
-        except Exception as e:
-            # 予期せぬエラーが発生した場合
+                    # デフォルトフォント
+                    font_name = ImageFont.load_default()
+        except:
             font_name = ImageFont.load_default()
-            st.error(f"フォント読み込みエラーが発生しました: {e} - デフォルトフォントを使用します。")
-            
-        # 💡 修正: ここからインデントをif deck_name:の直下（try/exceptの外側）に戻す
+        
         bbox = draw.textbbox((0, 0), deck_name, font=font_name)
         text_width = bbox[2] - bbox[0]
         text_height = bbox[3] - bbox[1]
@@ -379,9 +352,8 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
 
         draw.text((text_x, text_y), deck_name, fill="white", font=font_name)
     
-    # 💡 修正: ここも関数の本体レベルのインデント（if deck_nameの外側）に戻す
     # 下セクション：デッキカード（10x5グリッド）
-    y_start = UPPER_HEIGHT
+    y_start = UPPER_HEIGHT 
     x_start = (FINAL_WIDTH - (card_width * cards_per_row + margin_card * (cards_per_row - 1))) // 2
     
     all_deck_cards = []
@@ -389,16 +361,15 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
         all_deck_cards.extend([card_info['card_id']] * card_info['count'])
     
     card_images = {}
-    cards_to_load = set(all_deck_cards[:cards_per_row * cards_per_col])
+    cards_to_download = set(all_deck_cards[:cards_per_row * cards_per_col])
     
-    # 💡 修正: 同期的なローカル画像読み込みに変更
-    with st.spinner("カード画像を読み込み中..."):
-        for card_id in cards_to_load:
-            card_id, card_img = load_card_image(card_id, (card_width, card_height))
+    # 💡 修正: ThreadPoolExecutorを削除し、同期的なダウンロードに変更
+    # Pyodide/Streamlit Cloudなどの環境でマルチスレッドがエラーになるため
+    with st.spinner("カード画像をダウンロード中..."):
+        for card_id in cards_to_download:
+            card_id, card_img = download_card_image(card_id, (card_width, card_height))
             if card_img:
                 card_images[card_id] = card_img
-            else:
-                 st.warning(f"カード画像 {card_id}.png が {CARD_IMAGE_DIR} フォルダに見つかりません。")
     
     for idx, card_id in enumerate(all_deck_cards):
         if idx >= cards_per_row * cards_per_col:
@@ -477,10 +448,13 @@ if st.session_state["mode"] == "検索":
     st.write(f"該当カード数：{len(results)} 枚")
     
     # --- 検索結果表示 ---
+    # 💡 修正 2A: モバイルでの視認性を考慮し、2列を選択肢に追加
     selected_cols = st.sidebar.selectbox( 
         "1列あたりのカード数", 
-        [3, 4, 5], 
-        index=[3, 4, 5].index(st.session_state.get("search_cols", 3)),
+        [2, 3, 4, 5], 
+        # 既存の値がない/無効な場合は3列をデフォルトにする
+        index=([2, 3, 4, 5].index(st.session_state.get("search_cols", 3)) 
+               if st.session_state.get("search_cols", 3) in [2, 3, 4, 5] else 1), 
         key="search_cols_selectbox"
     )
     st.session_state["search_cols"] = selected_cols
@@ -489,12 +463,11 @@ if st.session_state["mode"] == "検索":
     cols = st.columns(cols_count) 
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
-        # 💡 修正: ローカル画像パスを使用
-        img_path = get_local_image_path(card_id)
+        img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
-            # 💡 修正: ローカルパスをst.imageに渡す
-            st.image(img_path, use_container_width=True) 
+            # 💡 修正: use_column_width=True を use_container_width=True に置き換え
+            st.image(img_url, use_container_width=True) 
 
 # ===============================
 # 🧱 デッキ作成モード
@@ -621,8 +594,7 @@ else:
         if leader is None:
             st.sidebar.warning("リーダーを選択してください。")
         else:
-            # 💡 修正: 画像生成時のメッセージをローカルファイル読み込みに合わせる
-            with st.spinner("画像を生成中...（ローカルファイルから画像を読み込みます）"):
+            with st.spinner("画像を生成中...（初回はカードダウンロードが同期処理のため時間がかかる場合があります）"):
                 deck_name = st.session_state.get("deck_name", "")
                 deck_img = create_deck_image(leader, st.session_state["deck"], df, deck_name)
                 buf = io.BytesIO()
@@ -852,14 +824,14 @@ else:
         
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
+        # 💡 モバイルでも見やすいように3列に固定
         cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] # 💡 追加: card_idを取得
-            # 💡 修正: ローカル画像パスを使用
-            img_path = get_local_image_path(card_id)
+            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
             with cols[idx % 3]:
-                # 💡 修正: ローカルパスをst.imageに渡す
-                st.image(img_path, caption=row["カード名"], use_container_width=True) 
+                # 💡 修正: use_column_width=True を use_container_width=True に置き換え
+                st.image(img_url, caption=row["カード名"], use_container_width=True) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
@@ -875,10 +847,9 @@ else:
         # リーダー表示
         col1, col2 = st.columns([1, 3])
         with col1:
-            # 💡 修正: ローカル画像パスを使用
-            leader_img_path = get_local_image_path(leader['カードID'])
-            # 💡 修正: ローカルパスをst.imageに渡す
-            st.image(leader_img_path, use_container_width=True) 
+            leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
+            # 💡 修正: use_column_width=True を use_container_width=True に置き換え
+            st.image(leader_img_url, use_container_width=True) 
         with col2:
             st.markdown(f"**{leader['カード名']}**")
             st.markdown(f"色: {leader['色']}")
@@ -910,22 +881,21 @@ else:
             
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
             
-            # 💡 5列表示に変更し、幅を自動調整
-            deck_cols = st.columns(5)
+            # 💡 修正 2B-2: デッキプレビューの表示を3列に変更
+            deck_cols = st.columns(3)
             col_idx = 0
             for card_info in deck_cards_sorted:
-                # 💡 修正: ローカル画像パスを使用
-                card_img_path = get_local_image_path(card_info['card_id'])
+                card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
-                with deck_cols[col_idx % 5]:
-                    # 💡 修正: ローカルパスをst.imageに渡す
-                    st.image(card_img_path, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
+                with deck_cols[col_idx % 3]:
+                    # 💡 修正: use_column_width=True を use_container_width=True に置き換え
+                    st.image(card_img_url, caption=f"{card_info['name']} × {card_info['count']}", use_container_width=True) 
                 col_idx += 1
                 
-                # 5枚ごとに改行（Streamlitのcolumnsの挙動を利用）
-                if col_idx % 5 == 0:
+                # 3枚ごとに改行
+                if col_idx % 3 == 0:
                      if col_idx < len(deck_cards_sorted) :
-                         deck_cols = st.columns(5)
+                         deck_cols = st.columns(3)
                          
         else:
             st.info("デッキにカードが追加されていません")
@@ -967,6 +937,7 @@ else:
         current_filter = st.session_state["deck_filter"]
 
         # UIの再構築：カード検索モードと同等のフィルタ
+        # 💡 フィルタUIは3列を維持（コンテンツが多いため）
         col_a, col_b, col_c = st.columns(3)
         with col_a:
             # 💡 修正: default=[] により初期選択をなしにする
@@ -1022,17 +993,16 @@ else:
         st.write(f"表示中のカード：{len(color_cards)} 枚")
         st.markdown("---")
         
-        # 💡 5列表示に変更し、幅を自動調整
-        card_cols = st.columns(5)
+        # 💡 修正 2B-3: カード追加画面の表示を3列に変更
+        card_cols = st.columns(3)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
+            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
-            # 💡 修正: ローカル画像パスを使用
-            img_path = get_local_image_path(card_id)
             
-            with card_cols[idx % 5]:
+            with card_cols[idx % 3]: # 💡 修正: 3列表示
                 current_count = st.session_state["deck"].get(card_id, 0)
-                # 💡 修正: ローカルパスをst.imageに渡す
-                st.image(img_path, caption=f"({current_count}/4枚)", use_container_width=True) 
+                # 💡 修正: use_column_width=True を use_container_width=True に置き換え
+                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
