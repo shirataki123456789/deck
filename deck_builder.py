@@ -1048,20 +1048,19 @@ else:
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
                 
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
-                        count = st.session_state["deck"].get(card_id, 0)
-                        if is_unlimited or count < 4:
-                            st.session_state["deck"][card_id] = count + 1
-                            st.rerun()
-                with btn_col2:
-                    # 💡 width='stretch'に置き換え
-                    if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
-                        if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
-                            if st.session_state["deck"][card_id] > 1:
-                                st.session_state["deck"][card_id] -= 1
-                            else:
-                                del st.session_state["deck"][card_id]
-                            st.rerun()
+                # 📌 変更後: st.columns(2)を削除し、縦に配置
+                
+                # ＋ボタンを配置（画面幅いっぱいになる）
+                if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
+                    count = st.session_state["deck"].get(card_id, 0)
+                    if is_unlimited or count < 4:
+                        st.session_state["deck"][card_id] = count + 1
+                        st.rerun()
+                
+                # −ボタンを配置（＋ボタンの下に縦に並ぶ）
+                if st.button("−", key=f"sub_deck_{card_id}_{idx}", width='stretch', disabled=current_count == 0):
+                    if card_id in st.session_state["deck"] and st.session_state["deck"][card_id] > 0:
+                        st.session_state["deck"][card_id] -= 1
+                        if st.session_state["deck"][card_id] == 0:
+                            del st.session_state["deck"][card_id]
+                        st.rerun()
