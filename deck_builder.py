@@ -66,13 +66,52 @@ st.markdown("""
 # ===============================
 # 🧠 キャッシュ付きデータ読み込み
 # ===============================
+# 💡 追加: カスタムカードCSVのファイル名
+CUSTOM_CARDS_CSV = "custom_cards.csv"
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
+    """Streamlit UI要素を含まない、純粋なデータロード関数"""
+    
+    # --- 1. メインカードリストの読み込み ---
     if not os.path.exists("cardlist_filtered.csv"):
-        st.error("エラー: cardlist_filtered.csv が見つかりません。")
+        # ❌ 修正: st.error()を削除
         return pd.DataFrame()
         
-    df = pd.read_csv("cardlist_filtered.csv")
+    df_main = pd.read_csv("cardlist_filtered.csv")
+    
+    # 💡 修正: カスタムカードとの統合を容易にするため、不足している列を追加（空値でOK）
+    if '画像URL' not in df_main.columns:
+        df_main['画像URL'] = None
+    
+    # --- 2. カスタムカードリストの読み込みと統合 ---
+    df_custom = pd.DataFrame()
+    if os.path.exists(CUSTOM_CARDS_CSV):
+        try:
+            # メインDFと同じ列構造を期待
+            df_custom = pd.read_csv(CUSTOM_CARDS_CSV)
+            # ❌ 修正: st.toast()を削除
+            
+        except Exception as e:
+            # ❌ 修正: st.warning()を削除
+            df_custom = pd.DataFrame() # 読み込みに失敗した場合は空にする
+
+    # 必須列のみを選択して結合 (列順序を合わせる)
+    # 💡 必須列のリストを定義
+    required_cols = list(df_main.columns)
+
+    # 結合前の列チェックと調整
+    if not df_custom.empty:
+        missing_cols = [col for col in required_cols if col not in df_custom.columns]
+        for col in missing_cols:
+            df_custom[col] = "-" # 欠損列を埋める
+
+        df_custom = df_custom[required_cols] # 列順を揃える
+        df = pd.concat([df_main, df_custom], ignore_index=True)
+    else:
+        df = df_main
+    # -----------------------------------------------------------
+    
     df = df.fillna("-")
     
     # 特徴と属性の処理を統一（全角/半角スラッシュ対応）
@@ -91,8 +130,13 @@ def load_data():
     
     return df
 
+# データのロード
 df = load_data()
+
+# ❌ 修正: ファイルが見つからないときのエラー処理を、キャッシュ外に移動
 if df.empty:
+    if not os.path.exists("cardlist_filtered.csv"):
+        st.error("エラー: cardlist_filtered.csv が見つかりません。")
     st.stop()
 
 # 無制限カードのリスト
@@ -214,6 +258,49 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
 # ===============================
 # 🖼️ デッキ画像生成関数 
 # ===============================
+
+# 💡 修正: カード画像ダウンロード関数を修正し、カスタムカード（URLが`http`または`https`で始まるもの）の場合は直接URLから画像をダウンロードするように変更。
+def download_card_image(card_id, df, target_size, crop_top_half=False):
+    """カードIDとDFから画像を取得。カスタムカード（画像URL持ち）に対応。"""
+    try:
+        card_row = df[df["カードID"] == card_id]
+        if card_row.empty:
+            return card_id, None
+            
+        card_row = card_row.iloc[0]
+        
+        # 1. 画像URLの決定
+        image_url = card_row['画像URL']
+        is_custom_card = pd.notna(image_url) and str(image_url).startswith(("http", "https"))
+        
+        if is_custom_card:
+            card_url = str(image_url)
+        else:
+            # 公式カードのURL
+            card_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+
+        # 2. 画像のダウンロード
+        response = requests.get(card_url, timeout=5)
+        if response.status_code == 200:
+            card_img = Image.open(BytesIO(response.content)).convert("RGBA")
+            
+            # 3. サイズ調整
+            if crop_top_half:
+                CROPPED_WIDTH = target_size[0]
+                CROPPED_HEIGHT = target_size[1]
+                
+                full_height_target = CROPPED_HEIGHT * 2 
+                card_img = card_img.resize((CROPPED_WIDTH, full_height_target), Image.LANCZOS)
+                
+                card_img = card_img.crop((0, 0, CROPPED_WIDTH, CROPPED_HEIGHT))
+            else:
+                card_img = card_img.resize(target_size, Image.LANCZOS) 
+                
+            return card_id, card_img
+    except Exception as e:
+        # st.error(f"画像ダウンロードエラー ({card_id}): {e}") # デバッグ用
+        return card_id, None
+
 @st.cache_data(ttl=3600, show_spinner=False) 
 def create_deck_image(leader, deck_dict, df, deck_name=""):
     """デッキリストの画像を生成（カード画像＋QRコード付き）2150x2048固定サイズ"""
@@ -283,47 +370,55 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     draw = ImageDraw.Draw(img)
     
     # 背景色（グラデーション対応）
+    # 💡 修正: 2色以上の場合、多色グラデーションに対応
     if len(leader_colors) == 1:
         bg_color = color_map.get(leader_colors[0], "#FFFFFF")
         draw.rectangle([0, 0, FINAL_WIDTH, FINAL_HEIGHT], fill=bg_color)
     elif len(leader_colors) >= 2:
-        color1 = color_map.get(leader_colors[0], "#FFFFFF")
-        color2 = color_map.get(leader_colors[1], "#FFFFFF")
+        
+        # 1. 使用する色のリストを取得 (HEX)
+        gradient_colors_hex = [color_map.get(c, "#FFFFFF") for c in leader_colors]
+        
         def hex_to_rgb(hex_color):
             hex_color = hex_color.lstrip('#')
             return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-        rgb1, rgb2 = hex_to_rgb(color1), hex_to_rgb(color2)
-
-        for x in range(FINAL_WIDTH):
-            ratio = x / FINAL_WIDTH
-            r = int(rgb1[0] * (1 - ratio) + rgb2[0] * ratio)
-            g = int(rgb1[1] * (1 - ratio) + rgb2[1] * ratio)
-            b = int(rgb1[2] * (1 - ratio) + rgb2[2] * ratio)
-            draw.line([(x, 0), (x, FINAL_HEIGHT)], fill=(r, g, b))
-    
-    # 画像ダウンロード関数
-    def download_card_image(card_id, target_size, crop_top_half=False):
-        try:
-            card_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
-            response = requests.get(card_url, timeout=5)
-            if response.status_code == 200:
-                card_img = Image.open(BytesIO(response.content)).convert("RGBA")
+            
+        # 2. RGBに変換
+        gradient_colors_rgb = [hex_to_rgb(c) for c in gradient_colors_hex]
+        num_colors = len(gradient_colors_rgb)
+        
+        # 3. 各ピクセルを計算
+        if num_colors == 2:
+             # 2色の場合は元の処理と同じ（線形グラデーション）
+             for x in range(FINAL_WIDTH):
+                 ratio = x / FINAL_WIDTH
+                 r = int(gradient_colors_rgb[0][0] * (1 - ratio) + gradient_colors_rgb[1][0] * ratio)
+                 g = int(gradient_colors_rgb[0][1] * (1 - ratio) + gradient_colors_rgb[1][1] * ratio)
+                 b = int(gradient_colors_rgb[0][2] * (1 - ratio) + gradient_colors_rgb[1][2] * ratio)
+                 draw.line([(x, 0), (x, FINAL_HEIGHT)], fill=(r, g, b))
+        else:
+            # 3色以上の場合は、各色を均等区間に配置したグラデーション
+            segment_width = FINAL_WIDTH / (num_colors - 1)
+            
+            for x in range(FINAL_WIDTH):
+                # 現在のx座標がどのセグメントに属するかを計算
+                segment_index = min(int(x / segment_width), num_colors - 2)
                 
-                if crop_top_half:
-                    CROPPED_WIDTH = target_size[0]
-                    CROPPED_HEIGHT = target_size[1]
-                    
-                    full_height_target = CROPPED_HEIGHT * 2 
-                    card_img = card_img.resize((CROPPED_WIDTH, full_height_target), Image.LANCZOS)
-                    
-                    card_img = card_img.crop((0, 0, CROPPED_WIDTH, CROPPED_HEIGHT))
-                else:
-                    card_img = card_img.resize(target_size, Image.LANCZOS) 
-                    
-                return card_id, card_img
-        except Exception as e:
-            return card_id, None
-
+                # セグメント内の開始色と終了色
+                start_rgb = gradient_colors_rgb[segment_index]
+                end_rgb = gradient_colors_rgb[segment_index + 1]
+                
+                # セグメント内の割合を計算 (0.0 から 1.0)
+                segment_x_start = segment_index * segment_width
+                ratio = (x - segment_x_start) / segment_width
+                
+                # 色のブレンド
+                r = int(start_rgb[0] * (1 - ratio) + end_rgb[0] * ratio)
+                g = int(start_rgb[1] * (1 - ratio) + end_rgb[1] * ratio)
+                b = int(start_rgb[2] * (1 - ratio) + end_rgb[2] * ratio)
+                
+                draw.line([(x, 0), (x, FINAL_HEIGHT)], fill=(r, g, b))
+    
     # --- 上セクションの配置（リーダー → デッキ名 → QR） ---
     
     GAP = 48 
@@ -345,7 +440,8 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
 
     # 1. リーダー画像を配置 
     try:
-        _, leader_img = download_card_image(leader['カードID'], LEADER_TARGET_SIZE, crop_top_half=True) 
+        # 💡 修正: dfを引数に追加
+        _, leader_img = download_card_image(leader['カードID'], df, LEADER_TARGET_SIZE, crop_top_half=True) 
         if leader_img:
             img.paste(leader_img, (leader_x, leader_y), leader_img) 
     except:
@@ -463,7 +559,8 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     # Pyodide/Streamlit Cloudなどの環境でマルチスレッドがエラーになるため
     with st.spinner("カード画像をダウンロード中..."):
         for card_id in cards_to_download:
-            card_id, card_img = download_card_image(card_id, (card_width, card_height))
+            # 💡 修正: dfを引数に追加
+            card_id, card_img = download_card_image(card_id, df, (card_width, card_height))
             if card_img:
                 card_images[card_id] = card_img
     
@@ -559,7 +656,13 @@ if st.session_state["mode"] == "検索":
     cols = st.columns(cols_count) 
     for idx, (_, row) in enumerate(results.iterrows()):
         card_id = row['カードID']
-        img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+        
+        # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
+        image_url = row['画像URL']
+        if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
+             img_url = str(image_url)
+        else:
+             img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
             # 💡 修正: use_column_width=True を use_container_width=True に置き換え
@@ -692,7 +795,7 @@ else:
         else:
             with st.spinner("画像を生成中...（初回はカードダウンロードが同期処理のため時間がかかる場合があります）"):
                 deck_name = st.session_state.get("deck_name", "")
-                deck_img = create_deck_image(leader, st.session_state["deck"], df, deck_name)
+                deck_img = create_deck_image(leader, st.session_state["deck"], df, deck_name) # 💡 dfを渡す
                 buf = io.BytesIO()
                 deck_img.save(buf, format="PNG")
                 buf.seek(0)
@@ -949,7 +1052,14 @@ else:
         cols = st.columns(3)
         for idx, (_, row) in enumerate(leaders.iterrows()):
             card_id = row['カードID'] # 💡 追加: card_idを取得
-            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+            
+            # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
+            image_url = row['画像URL']
+            if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
+                 img_url = str(image_url)
+            else:
+                 img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
+                 
             with cols[idx % 3]:
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                 st.image(img_url, use_container_width=True) 
@@ -968,7 +1078,13 @@ else:
         # リーダー表示
         col1, col2 = st.columns([1, 3])
         with col1:
-            leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
+            # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
+            image_url = leader['画像URL']
+            if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
+                 leader_img_url = str(image_url)
+            else:
+                 leader_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{leader['カードID']}.png"
+                 
             # 💡 修正: use_column_width=True を use_container_width=True に置き換え
             st.image(leader_img_url, use_container_width=True) 
         with col2:
@@ -997,7 +1113,8 @@ else:
                     "count": count,
                     "new_sort_key": (type_rank, card_row["コスト数値"], base_priority, card_id),
                     "cost": card_row["コスト数値"],
-                    "name": card_row["カード名"]
+                    "name": card_row["カード名"],
+                    "image_url": card_row["画像URL"] # 💡 追加: カスタムカードの画像URL
                 })
             
             deck_cards_sorted.sort(key=lambda x: x["new_sort_key"])
@@ -1006,8 +1123,14 @@ else:
             deck_cols = st.columns(3)
             col_idx = 0
             for card_info in deck_cards_sorted:
-                card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
                 
+                # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
+                image_url = card_info['image_url']
+                if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
+                     card_img_url = str(image_url)
+                else:
+                     card_img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_info['card_id']}.png"
+                     
                 with deck_cols[col_idx % 3]:
                     # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                     st.image(card_img_url, use_container_width=True) 
@@ -1131,8 +1254,14 @@ else:
         # 💡 修正 2B-3: 固定の3列ではなく、選択された列数を使用
         card_cols = st.columns(cols_count)
         for idx, (_, card) in enumerate(color_cards.iterrows()):
-            img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card['カードID']}.png"
             card_id = card["カードID"]
+            
+            # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
+            image_url = card['画像URL']
+            if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
+                 img_url = str(image_url)
+            else:
+                 img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
             
             with card_cols[idx % cols_count]: # 💡 修正: 選択された列数を使用
                 current_count = st.session_state["deck"].get(card_id, 0)
