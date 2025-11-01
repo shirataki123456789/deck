@@ -1,4 +1,2 @@
-﻿カードID,カード名,色,コスト,パワー,カウンター,属性,タイプ,特徴,テキスト,トリガー,入手情報,ブロックアイコン,画像URL
-P-000,モンキー・D・ルフィ,赤/緑/青/紫/黒/黄,-,5000,0,打,LEADER,麦わらの一味,テスト,,,1,https://www.onepiece-cardgame.com/images/rules/errata_card/001/P-Luffy.png
-
-
+カード名,カードID,カードコード,タイプ,レアリティ,コスト,属性,パワー,カウンター,色,ブロックアイコン,特徴,テキスト,トリガー,入手情報,画像URL
+モンキー・D・ルフィ,P,P,LEADER,L,-,打,5000,0,赤/緑/青/紫/黒/黄,1,麦わらの一味,テスト,,８パックバトル,https://www.onepiece-cardgame.com/images/rules/errata_card/001/P-Luffy.png
