@@ -68,6 +68,8 @@ st.markdown("""
 # ===============================
 # 💡 追加: カスタムカードCSVのファイル名
 CUSTOM_CARDS_CSV = "custom_cards.csv"
+# 💡 追加: パラレルカードCSVのファイル名
+PARALLEL_CARDS_CSV = "cardlist_p_only.csv" 
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_data():
@@ -84,32 +86,57 @@ def load_data():
     if '画像URL' not in df_main.columns:
         df_main['画像URL'] = None
     
+    # 💡 追加: パラレルカードフラグの追加
+    df_main['is_parallel'] = False 
+    
     # --- 2. カスタムカードリストの読み込みと統合 ---
     df_custom = pd.DataFrame()
     if os.path.exists(CUSTOM_CARDS_CSV):
         try:
             # メインDFと同じ列構造を期待
             df_custom = pd.read_csv(CUSTOM_CARDS_CSV)
-            # ❌ 修正: st.toast()を削除
             
         except Exception as e:
-            # ❌ 修正: st.warning()を削除
             df_custom = pd.DataFrame() # 読み込みに失敗した場合は空にする
 
-    # 必須列のみを選択して結合 (列順序を合わせる)
-    # 💡 必須列のリストを定義
+    # --- 3. パラレルカードリストの読み込みと統合 ---
+    df_parallel = pd.DataFrame()
+    if os.path.exists(PARALLEL_CARDS_CSV):
+        try:
+            df_parallel = pd.read_csv(PARALLEL_CARDS_CSV)
+            if '画像URL' not in df_parallel.columns:
+                df_parallel['画像URL'] = None
+            df_parallel['is_parallel'] = True # パラレルカードにフラグを立てる
+        except Exception as e:
+            df_parallel = pd.DataFrame() # 読み込みに失敗した場合は空にする
+            
+    # 必須列のリストを定義 (パラレルカードフラグも含む)
     required_cols = list(df_main.columns)
 
-    # 結合前の列チェックと調整
+    # 結合前の列チェックと調整 (カスタムカード)
     if not df_custom.empty:
         missing_cols = [col for col in required_cols if col not in df_custom.columns]
         for col in missing_cols:
             df_custom[col] = "-" # 欠損列を埋める
-
+        df_custom['is_parallel'] = False # カスタムカードは通常パラレルではないと仮定
         df_custom = df_custom[required_cols] # 列順を揃える
-        df = pd.concat([df_main, df_custom], ignore_index=True)
-    else:
-        df = df_main
+    
+    # 結合前の列チェックと調整 (パラレルカード)
+    if not df_parallel.empty:
+        missing_cols = [col for col in required_cols if col not in df_parallel.columns]
+        for col in missing_cols:
+            df_parallel[col] = "-" 
+        df_parallel = df_parallel[required_cols] 
+
+    # データの結合
+    df_list = [df_main]
+    if not df_custom.empty:
+        df_list.append(df_custom)
+    if not df_parallel.empty:
+        # メインカードと重複するものは除外しない（同じカードIDで別バージョンのため）
+        df_list.append(df_parallel)
+
+    df = pd.concat(df_list, ignore_index=True)
     # -----------------------------------------------------------
     
     df = df.fillna("-")
@@ -173,6 +200,28 @@ def color_sort_key(row):
 df["ソートキー"] = df.apply(color_sort_key, axis=1)
 
 # ===============================
+# 💡 修正 1: パラレルカードフィルタの状態更新コールバック関数
+# ===============================
+def update_parallel_filter(key_suffix):
+    """
+    st.radio の値が変更されたときに呼ばれ、
+    裏側のセッションステート(parallel_filter_search/deck/leader)を更新する
+    """
+    # st.radio の key にはユーザーが選択したラベル (例: '両方表示') が入っている
+    label = st.session_state[f"parallel_{key_suffix}_radio"]
+    
+    # ラベルを内部状態 ('normal', 'parallel', 'both') にマッピング
+    internal_mode = {
+        "通常カードのみ": "normal",
+        "パラレルカードのみ": "parallel",
+        "両方表示": "both"
+    }.get(label, "normal")
+    
+    # 裏側のフィルター状態を更新
+    st.session_state[f"parallel_filter_{key_suffix}"] = internal_mode
+
+
+# ===============================
 # 💾 セッション初期化
 # ===============================
 if "leader" not in st.session_state:
@@ -189,12 +238,20 @@ if "search_cols" not in st.session_state:
     st.session_state["search_cols"] = 3
 if "qr_upload_key" not in st.session_state: 
     st.session_state["qr_upload_key"] = 0
+# 💡 修正: パラレルカードフィルタの状態を文字列で初期化
+if "parallel_filter_search" not in st.session_state:
+    st.session_state["parallel_filter_search"] = "normal" # normal, parallel, both
+if "parallel_filter_deck" not in st.session_state:
+    st.session_state["parallel_filter_deck"] = "normal" # normal, parallel, both
+# 💡 追加: リーダー選択用のパラレルカードフィルタの状態を初期化
+if "parallel_filter_leader" not in st.session_state:
+    st.session_state["parallel_filter_leader"] = "normal" # normal, parallel, both
     
 # デッキ追加画面用のフィルタ状態を初期化
 if "deck_filter" not in st.session_state:
     st.session_state["deck_filter"] = {
         "colors": [],
-        "types": [], # 💡 修正: 初期選択を空リストに変更
+        "types": [], 
         "costs": [],
         "counters": [],
         "attributes": [],
@@ -207,13 +264,37 @@ if "deck_filter" not in st.session_state:
 # ===============================
 # 🔍 検索関数
 # ===============================
-def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature_selected, free_words, series_ids=None, leader_colors=None):
+# 💡 修正: parallel_mode 引数を文字列に変更 ("normal", "parallel", "both")
+def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature_selected, free_words, series_ids=None, leader_colors=None, parallel_mode="normal"):
     results = df.copy()
+
+    # 💡 修正: パラレルカードフィルタの適用
+    if parallel_mode == "parallel":
+        # パラレルカードのみ
+        results = results[results["is_parallel"] == True]
+    elif parallel_mode == "normal":
+        # 通常カードのみ
+        results = results[results["is_parallel"] == False]
+    # "both" の場合はフィルタリングしない (results = df.copy() のまま)
 
     # デッキ作成モードの場合、リーダーの色に基づいてフィルタ
     if leader_colors:
         results = results[results["タイプ"] != "LEADER"]
         results = results[results["色"].apply(lambda c: any(lc in c for lc in leader_colors))]
+    else:
+        # デッキ作成モード以外の場合、そして "both" モードではない場合、
+        # 同じカードIDを持つ通常版を優先するロジックを適用
+        if parallel_mode == "normal":
+            # "normal" モードの場合、通常カードのみが残っているので、重複排除は不要。
+            pass
+        elif parallel_mode == "parallel":
+            # "parallel" モードの場合、パラレルカードのみが残っているので、重複排除は不要。
+            pass
+        elif parallel_mode == "both":
+            # "both" モードの場合、LEADER以外で同じカードIDを持つ通常版とパラレル版が混在する。
+            # このままにしておくことで、両方のバージョンが表示される。
+            pass
+
 
     if colors:
         results = results[results["色"].apply(lambda c: any(col in c for col in colors))]
@@ -251,7 +332,8 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
             ]
 
     results = results.sort_values(
-        by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True]
+        by=["ソートキー", "コスト数値", "カードID", "is_parallel"], # is_parallelをソートキーに追加
+        ascending=[True, True, True, True]
     )
     return results
 
@@ -263,14 +345,19 @@ def filter_cards(df, colors, types, costs, counters, attributes, blocks, feature
 def download_card_image(card_id, df, target_size, crop_top_half=False):
     """カードIDとDFから画像を取得。カスタムカード（画像URL持ち）に対応。"""
     try:
-        card_row = df[df["カードID"] == card_id]
-        if card_row.empty:
-            return card_id, None
+        # 💡 修正: is_parallel=False のカードを優先して取得
+        card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+        if card_row_base.empty:
+            # 通常版がない場合はパラレルカードを取得 (ただし、リーダーは除外)
+            card_row = df[df["カードID"] == card_id].iloc[0]
+        else:
+            card_row = card_row_base.iloc[0]
             
-        card_row = card_row.iloc[0]
-        
         # 1. 画像URLの決定
-        image_url = card_row['画像URL']
+        image_url = card_row.get('画像URL') # get()でキーが存在しない場合に対応
+        if pd.isna(image_url): # NaN対策
+             image_url = None
+             
         is_custom_card = pd.notna(image_url) and str(image_url).startswith(("http", "https"))
         
         if is_custom_card:
@@ -333,7 +420,13 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     
     deck_cards_sorted = []
     for card_id, count in deck_dict.items():
-        card_row = df[df["カードID"] == card_id].iloc[0]
+        # 💡 修正: is_parallel=False のカードを優先して取得
+        card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+        if card_row_base.empty:
+            card_row = df[df["カードID"] == card_id].iloc[0]
+        else:
+            card_row = card_row_base.iloc[0]
+            
         base_priority, type_rank, sub_priority, multi_flag = card_row["ソートキー"]
         deck_cards_sorted.append({
             "card_id": card_id,
@@ -366,7 +459,7 @@ def create_deck_image(leader, deck_dict, df, deck_name=""):
     margin_card = 0
     
     # 画像作成 (RGBAモードで初期化)
-    img = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (255, 255, 255, 255))
+    img = Image.new('RGBA', (FINAL_WIDTH, FINAL_HEIGHT), (0, 0, 0, 0)) # 透明な背景で初期化
     draw = ImageDraw.Draw(img)
     
     # 背景色（グラデーション対応）
@@ -610,6 +703,23 @@ if st.session_state["mode"] == "検索":
     st.sidebar.markdown("---")
     st.sidebar.subheader("検索フィルタ")
     
+    # 💡 修正 2A: パラレルカードフィルタをコールバック方式に変更して安定化
+    radio_options = ["通常カードのみ", "パラレルカードのみ", "両方表示"]
+    internal_modes = ["normal", "parallel", "both"]
+    
+    st.sidebar.radio(
+        "カードバージョン", 
+        radio_options,
+        key="parallel_search_radio", # st.session_state["parallel_search_radio"] に選択ラベルが保存される
+        index=internal_modes.index(st.session_state["parallel_filter_search"]), # 裏側の状態に基づいて初期値を設定
+        on_change=update_parallel_filter, # 変更時にコールバックを呼び出し、裏側の状態を更新
+        args=("search",), # コールバックに渡す引数
+        horizontal=True
+    )
+    
+    # 選択に応じてセッションステートを更新する処理はコールバックに移譲したため削除
+
+    
     colors = st.sidebar.multiselect("色を選択", color_order, key="search_colors")
     types = st.sidebar.multiselect("タイプを選択", list(type_priority.keys()), key="search_types")
     costs = st.sidebar.multiselect("コストを選択", sorted(df["コスト数値"].unique()), key="search_costs")
@@ -632,7 +742,9 @@ if st.session_state["mode"] == "検索":
     
     # --- 検索ロジック (常に実行) ---
     st.session_state["search_results"] = filter_cards(
-        df, colors, types, costs, counters, attributes, blocks, feature_selected, free_words, series_ids=series_ids
+        df, colors, types, costs, counters, attributes, blocks, feature_selected, free_words, 
+        series_ids=series_ids, 
+        parallel_mode=st.session_state["parallel_filter_search"] # 💡 修正: パラレルフィルタの適用
     )
     
     results = st.session_state["search_results"]
@@ -665,6 +777,11 @@ if st.session_state["mode"] == "検索":
              img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
         
         with cols[idx % cols_count]: 
+            caption_text = f"{row['カード名']} ({card_id})"
+            # 💡 修正: パラレルマークの追加
+            if row['is_parallel']:
+                caption_text = f"✨P {caption_text}"
+                
             # 💡 修正: use_column_width=True を use_container_width=True に置き換え
             st.image(img_url, use_container_width=True) 
 
@@ -680,7 +797,16 @@ else:
     
     leader = st.session_state.get("leader")
     if leader is not None:
-        st.sidebar.markdown(f"**リーダー:** {leader['カード名']} ({leader['カードID']})")
+        # 💡 修正: is_parallel=False のリーダーカード情報を優先して表示
+        leader_display = df[(df["カードID"] == leader['カードID']) & (df["is_parallel"] == False)]
+        if leader_display.empty:
+            leader_display = df[df["カードID"] == leader['カードID']]
+            
+        if not leader_display.empty:
+            leader_name = leader_display.iloc[0]['カード名']
+            st.sidebar.markdown(f"**リーダー:** {leader_name} ({leader['カードID']})")
+        else:
+            st.sidebar.markdown(f"**リーダー:** {leader['カードID']}")
     
     if leader is not None:
         deck_name_input = st.sidebar.text_input("デッキ名", value=st.session_state.get("deck_name", ""), key="deck_name_input")
@@ -693,7 +819,13 @@ else:
     if st.session_state["deck"]:
         deck_cards = []
         for card_id, count in st.session_state["deck"].items():
-            card_row = df[df["カードID"] == card_id].iloc[0]
+            # 💡 修正: is_parallel=False のカード情報を優先して取得
+            card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+            if card_row_base.empty:
+                card_row = df[df["カードID"] == card_id].iloc[0]
+            else:
+                card_row = card_row_base.iloc[0]
+                
             # ソートキーを再計算 (元のコードのソートキー取得ロジックに合わせる)
             base_priority, type_rank, sub_priority, multi_flag = card_row["ソートキー"]
             deck_cards.append({
@@ -767,7 +899,13 @@ else:
             
             deck_cards_sorted = []
             for card_id, count in st.session_state["deck"].items():
-                card_row = df[df["カードID"] == card_id].iloc[0]
+                # 💡 修正: is_parallel=False のカード情報を優先して取得
+                card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+                if card_row_base.empty:
+                    card_row = df[df["カードID"] == card_id].iloc[0]
+                else:
+                    card_row = card_row_base.iloc[0]
+                    
                 base_priority, type_rank, _, _ = card_row["ソートキー"]
                 deck_cards_sorted.append({
                     "card_id": card_id,
@@ -850,7 +988,11 @@ else:
                         
                     leader_count, leader_id = first_line.split("x")
                         
-                    leader_row = df[df["カードID"] == leader_id]
+                    # 💡 修正: is_parallel=False のカードを優先して取得
+                    leader_row = df[(df["カードID"] == leader_id) & (df["is_parallel"] == False)]
+                    if leader_row.empty:
+                        leader_row = df[df["カードID"] == leader_id]
+                        
                     if not leader_row.empty:
                         st.session_state["leader"] = leader_row.iloc[0].to_dict()
                         st.session_state["deck"] = {}
@@ -860,7 +1002,8 @@ else:
                             if "x" in line:
                                 count, card_id = line.split("x")
                                 count = int(count)
-                                if card_id in df["カードID"].values:
+                                # 💡 修正: 通常版のカードIDが存在するかチェック
+                                if card_id in df["カードID"].values: # 通常版、パラレル版問わず存在すればOK
                                     st.session_state["deck"][card_id] = count
                         
                         st.session_state["deck_view"] = "preview"
@@ -905,7 +1048,11 @@ else:
                              
                         leader_count, leader_id = first_line.split("x")
                              
-                        leader_row = df[df["カードID"] == leader_id]
+                        # 💡 修正: is_parallel=False のカードを優先して取得
+                        leader_row = df[(df["カードID"] == leader_id) & (df["is_parallel"] == False)]
+                        if leader_row.empty:
+                            leader_row = df[df["カードID"] == leader_id]
+                            
                         if leader_row.empty:
                             st.sidebar.error(f"リーダーカード {leader_id} が見つかりません。")
                         else:
@@ -917,8 +1064,8 @@ else:
                                 if "x" in line:
                                     count, card_id = line.split("x")
                                     count = int(count)
-                                    card_row = df[df["カードID"] == card_id]
-                                    if not card_row.empty:
+                                    # 💡 修正: 通常版のカードIDが存在するかチェック
+                                    if card_id in df["カードID"].values: # 通常版、パラレル版問わず存在すればOK
                                         st.session_state["deck"][card_id] = count
                             
                             st.session_state["deck_view"] = "preview"
@@ -946,7 +1093,13 @@ else:
             
             deck_cards_sorted = []
             for card_id, count in st.session_state["deck"].items():
-                card_row = df[df["カードID"] == card_id].iloc[0]
+                # 💡 修正: is_parallel=False のカード情報を優先して取得
+                card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+                if card_row_base.empty:
+                    card_row = df[df["カードID"] == card_id].iloc[0]
+                else:
+                    card_row = card_row_base.iloc[0]
+                    
                 base_priority, type_rank, _, _ = card_row["ソートキー"]
                 deck_cards_sorted.append({
                     "card_id": card_id,
@@ -1003,7 +1156,12 @@ else:
                     st.rerun()
 
                 leader_count, leader_id = first_line.split("x")
-                leader_row = df[df["カードID"] == leader_id]
+                
+                # 💡 修正: is_parallel=False のカードを優先して取得
+                leader_row = df[(df["カードID"] == leader_id) & (df["is_parallel"] == False)]
+                if leader_row.empty:
+                    leader_row = df[df["カードID"] == leader_id]
+                    
                 if not leader_row.empty:
                     st.session_state["leader"] = leader_row.iloc[0].to_dict()
                     st.session_state["deck"] = {}
@@ -1013,7 +1171,8 @@ else:
                         if "x" in line:
                             count, card_id = line.split("x")
                             count = int(count)
-                            if card_id in df["カードID"].values:
+                            # 💡 修正: 通常版のカードIDが存在するかチェック
+                            if card_id in df["カードID"].values: # 通常版、パラレル版問わず存在すればOK
                                 st.session_state["deck"][card_id] = count
                     
                     st.session_state["deck_view"] = "preview"
@@ -1044,7 +1203,34 @@ else:
     # メインエリア：リーダー選択 / デッキプレビュー / カード追加
     if st.session_state["deck_view"] == "leader" or st.session_state["leader"] is None:
         st.subheader("① リーダーを選択")
+        
+        # 💡 追加: リーダー選択用のパラレルカードフィルタ
+        radio_options = ["通常カードのみ", "パラレルカードのみ", "両方表示"]
+        internal_modes = ["normal", "parallel", "both"]
+        
+        st.radio(
+            "リーダーバージョン", 
+            radio_options,
+            key="parallel_leader_radio", # 新しいキー
+            index=internal_modes.index(st.session_state["parallel_filter_leader"]), # 裏側の状態に基づいて初期値を設定
+            on_change=update_parallel_filter, # コールバックを呼び出し
+            args=("leader",), # コールバックに渡す引数
+            horizontal=True
+        )
+        st.markdown("---")
+
+        # 💡 修正: リーダーのフィルタリングロジックを更新
         leaders = df[df["タイプ"] == "LEADER"]
+        
+        current_parallel_mode = st.session_state["parallel_filter_leader"]
+        
+        if current_parallel_mode == "parallel":
+            # パラレルカードのみ
+            leaders = leaders[leaders["is_parallel"] == True]
+        elif current_parallel_mode == "normal":
+            # 通常カードのみ
+            leaders = leaders[leaders["is_parallel"] == False]
+        # "both" の場合はフィルタリングしない
         
         leaders = leaders.sort_values(by=["ソートキー", "コスト数値", "カードID"], ascending=[True, True, True])
         
@@ -1061,9 +1247,15 @@ else:
                  img_url = f"https://www.onepiece-cardgame.com/images/cardlist/card/{card_id}.png"
                  
             with cols[idx % 3]:
+                caption_text = f"{row['カード名']} ({card_id})"
+                # 💡 修正: パラレルマークの追加
+                if row['is_parallel']:
+                    caption_text = f"✨P {caption_text}"
+                
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
                 st.image(img_url, use_container_width=True) 
                 if st.button(f"選択", key=f"leader_{card_id}"):
+                    # 選択されたカードの情報をセッションステートに保存
                     st.session_state["leader"] = row.to_dict()
                     st.session_state["deck"].clear()
                     st.session_state["deck_name"] = ""
@@ -1078,8 +1270,18 @@ else:
         # リーダー表示
         col1, col2 = st.columns([1, 3])
         with col1:
+            # 💡 修正: is_parallel=False のカード情報を優先して取得
+            leader_display = df[(df["カードID"] == leader['カードID']) & (df["is_parallel"] == False)]
+            if leader_display.empty:
+                leader_display = df[df["カードID"] == leader['カードID']]
+                
+            if not leader_display.empty:
+                leader_row = leader_display.iloc[0]
+            else:
+                leader_row = leader
+                
             # 💡 修正: カスタムカードの画像URLを使用するロジックを追加
-            image_url = leader['画像URL']
+            image_url = leader_row['画像URL']
             if pd.notna(image_url) and str(image_url).startswith(("http", "https")):
                  leader_img_url = str(image_url)
             else:
@@ -1088,9 +1290,9 @@ else:
             # 💡 修正: use_column_width=True を use_container_width=True に置き換え
             st.image(leader_img_url, use_container_width=True) 
         with col2:
-            st.markdown(f"**{leader['カード名']}**")
-            st.markdown(f"色: {leader['色']}")
-            st.markdown(f"カードID: {leader['カードID']}")
+            st.markdown(f"**{leader_row['カード名']}**")
+            st.markdown(f"色: {leader_row['色']}")
+            st.markdown(f"カードID: {leader_row['カードID']}")
             if st.button("🔄 リーダーを変更"):
                 st.session_state["leader"] = None
                 st.session_state["deck"].clear()
@@ -1106,7 +1308,13 @@ else:
         if st.session_state["deck"]:
             deck_cards_sorted = []
             for card_id, count in st.session_state["deck"].items():
-                card_row = df[df["カードID"] == card_id].iloc[0]
+                # 💡 修正: is_parallel=False のカード情報を優先して取得
+                card_row_base = df[(df["カードID"] == card_id) & (df["is_parallel"] == False)]
+                if card_row_base.empty:
+                    card_row = df[df["カードID"] == card_id].iloc[0]
+                else:
+                    card_row = card_row_base.iloc[0]
+                    
                 base_priority, type_rank, sub_priority, multi_flag = card_row["ソートキー"]
                 deck_cards_sorted.append({
                     "card_id": card_id,
@@ -1204,6 +1412,21 @@ else:
         with col_e:
             deck_blocks = st.multiselect("ブロックアイコン", sorted(df["ブロックアイコン"].unique()), default=current_filter["blocks"], key="deck_blocks")
 
+        # 💡 修正 2B: パラレルカードフィルタをコールバック方式に変更して安定化
+        radio_options = ["通常カードのみ", "パラレルカードのみ", "両方表示"]
+        internal_modes = ["normal", "parallel", "both"]
+        
+        st.radio(
+            "カードバージョン", 
+            radio_options,
+            key="parallel_deck_radio", # st.session_state["parallel_deck_radio"] に選択ラベルが保存される
+            index=internal_modes.index(st.session_state["parallel_filter_deck"]), # 裏側の状態に基づいて初期値を設定
+            on_change=update_parallel_filter, # 変更時にコールバックを呼び出し、裏側の状態を更新
+            args=("deck",), # コールバックに渡す引数
+            horizontal=True
+        )
+        # 選択に応じてセッションステートを更新する処理はコールバックに移譲したため削除
+            
         # フィルタ状態の更新
         st.session_state["deck_filter"] = {
             "colors": [], # リーダー色で絞られるため空
@@ -1229,7 +1452,8 @@ else:
             feature_selected=deck_features, 
             free_words=deck_free, 
             series_ids=deck_series_ids,
-            leader_colors=leader_colors # リーダーの色を渡してフィルタリング
+            leader_colors=leader_colors, # リーダーの色を渡してフィルタリング
+            parallel_mode=st.session_state["parallel_filter_deck"] # 💡 修正: パラレルフィルタの適用
         )
         
         color_cards = st.session_state["deck_results"]
@@ -1265,12 +1489,16 @@ else:
             
             with card_cols[idx % cols_count]: # 💡 修正: 選択された列数を使用
                 current_count = st.session_state["deck"].get(card_id, 0)
+                caption_text = f"({current_count}/4枚)"
+                
+                # 💡 追加: パラレルカードにマーク
+                if card['is_parallel']:
+                    caption_text = "✨P " + caption_text
+                
                 # 💡 修正: use_column_width=True を use_container_width=True に置き換え
-                st.image(img_url, caption=f"({current_count}/4枚)", use_container_width=True) 
+                st.image(img_url, caption=caption_text, use_container_width=True) 
                 
                 is_unlimited = card_id in UNLIMITED_CARDS
-                
-                # 📌 変更後: st.columns(2)を削除し、縦に配置
                 
                 # ＋ボタンを配置（画面幅いっぱいになる）
                 if st.button("＋", key=f"add_deck_{card_id}_{idx}", type="primary", width='stretch', disabled=(not is_unlimited and current_count >= 4)):
